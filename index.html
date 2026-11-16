@@ -207,7 +207,7 @@
       <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div class="space-y-3">
           <div class="text-xs font-mono-code uppercase tracking-widest text-zinc-500">
-            TRPG AUDIO SYNC SYSTEM · v2.3
+            TRPG AUDIO SYNC SYSTEM · v2.4
           </div>
           <h1 class="text-3xl sm:text-4xl font-light text-white tracking-tight">
             进入跑团音频房间
@@ -239,6 +239,7 @@
             复制房间码
           </button>
         </div>
+        <div id="lobby-room-error-banner" class="hidden text-xs text-rose-300 bg-rose-500/10 border border-rose-500/20 rounded-xl px-4 py-2.5"></div>
       </div>
 
       <!-- Step 2: Role Cards -->
@@ -273,11 +274,11 @@
             <div class="space-y-4">
               <div class="flex items-center justify-between">
                 <span class="text-xs font-mono-code uppercase tracking-widest text-zinc-500">ROLE / PLAYER</span>
-                <span class="text-xs font-mono-code px-2.5 py-0.5 rounded bg-white/5 text-zinc-400">需审批准入</span>
+                <span class="text-xs font-mono-code px-2.5 py-0.5 rounded bg-white/5 text-zinc-400">同码直连</span>
               </div>
               <h2 class="text-xl font-medium text-white">玩家端 (Player)</h2>
               <p class="text-xs text-zinc-400 leading-relaxed">
-                填写你的玩家名称发送入房申请，主持人通过后即可同步收听房间音频、独立调节耳机总音量或投递歌曲。
+                输入与主持人相同的房间码与你的玩家名称，即可直接进入房间同步收听音频、调节音量或投递歌曲。
               </p>
               <div class="pt-2">
                 <label class="block text-xs text-zinc-400 mb-2">玩家名称 / 角色名</label>
@@ -285,8 +286,8 @@
               </div>
             </div>
 
-            <button onclick="requestEnterRoomAsPlayer()" class="w-full py-3.5 rounded-xl text-xs font-medium tracking-wide bg-white/10 hover:bg-white/15 text-white border border-white/10 transition">
-              申请以玩家身份进入房间
+            <button id="btn-enter-as-player" onclick="requestEnterRoomAsPlayer()" class="w-full py-3.5 rounded-xl text-xs font-medium tracking-wide bg-white/10 hover:bg-white/15 text-white border border-white/10 transition">
+              以玩家身份进入房间
             </button>
           </div>
         </div>
@@ -343,14 +344,14 @@
           </span>
           <span class="text-zinc-600">·</span>
           <span class="text-xs font-mono-code text-zinc-400">
-            v2.3 · ROOM <strong id="header-room-code-text" class="text-zinc-200 font-normal">TRPG-8842</strong>
+            v2.4 · ROOM <strong id="header-room-code-text" class="text-zinc-200 font-normal">TRPG-8842</strong>
           </span>
         </div>
         <h1 id="room-title-display" class="text-2xl sm:text-3xl font-light text-white tracking-tight">
           跑团跨网同步混音台
         </h1>
         <p id="approved-players-summary" class="text-xs text-zinc-500">
-          当前已准入玩家：暂无
+          当前在线玩家：暂无
         </p>
       </div>
 
@@ -908,7 +909,43 @@
     // =====================================================
     // 1. CLEAN INITIAL STATE (ZERO PRESET TRACKS, ZERO PRESET SCENES)
     // =====================================================
+    const DEFAULT_THEME = {
+      roomTitle: '跑团跨网同步混音台',
+      accent: '#e14141',
+      bgImage: '',
+      bgDim: 92,
+      bgBlur: 16
+    };
     const CLIENT_SESSION_ID = 'client_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+
+    function getDefaultTheme() {
+      return Object.assign({}, DEFAULT_THEME);
+    }
+
+    function saveCurrentRoomTheme() {
+      if (state.role === 'dm' && state.roomCode) {
+        if (!state.themesByRoom) state.themesByRoom = {};
+        state.themesByRoom[state.roomCode] = Object.assign({}, state.theme);
+      }
+    }
+
+    function syncThemeModalInputs() {
+      const t = state.theme || getDefaultTheme();
+      const titleIn = document.getElementById('theme-room-title');
+      if (titleIn) titleIn.value = t.roomTitle || DEFAULT_THEME.roomTitle;
+      const picker = document.getElementById('theme-accent-picker');
+      if (picker) picker.value = t.accent || DEFAULT_THEME.accent;
+      const bgUrl = document.getElementById('theme-bg-url');
+      if (bgUrl) bgUrl.value = (t.bgImage && !t.bgImage.startsWith('data:')) ? t.bgImage : '';
+      const bgDim = document.getElementById('theme-bg-dim');
+      if (bgDim) bgDim.value = t.bgDim ?? 92;
+      const dimVal = document.getElementById('bg-dim-val');
+      if (dimVal) dimVal.textContent = (t.bgDim ?? 92) + '%';
+      const bgBlur = document.getElementById('theme-bg-blur');
+      if (bgBlur) bgBlur.value = t.bgBlur ?? 16;
+      const blurVal = document.getElementById('bg-blur-val');
+      if (blurVal) blurVal.textContent = (t.bgBlur ?? 16) + 'px';
+    }
 
     const state = {
       viewStage: 'lobby', // 'lobby' | 'player_waiting' | 'in_room'
@@ -925,6 +962,7 @@
       searchMode: 'all',
       tutorialSeenHost: false,
       tutorialSeenPlayer: false,
+      themesByRoom: {},
       theme: {
         roomTitle: '跑团跨网同步混音台',
         accent: '#e14141',
@@ -953,8 +991,8 @@
     const TUTORIAL_STEPS = {
       host: [
         {
-          title: '第一步：房间码与玩家准入机制',
-          desc: '进入房间前确认顶部的「房间频道码」并复制发给玩家。同一房间仅允许一位主持人在线（你进入后其他人的主持人按钮会自动锁定）。当玩家输入名称申请进入时，你会在页面上方收到准入通知，点击「准许」后玩家即可连入。',
+          title: '第一步：分房间码与好友直连',
+          desc: '进入房间前确认顶部的「房间频道码」并复制发给玩家。不同桌输入不同的房间码即可完全隔离、互不干扰；玩家输入相同房间码即可直接进入本房间同步收听。',
           tip: '提示：已准入的玩家名单会实时显示在顶部标题栏下方。'
         },
         {
@@ -975,9 +1013,9 @@
       ],
       player: [
         {
-          title: '第一步：输入房间码与玩家名称申请入房',
-          desc: '在入口大厅输入主持人发给你的「房间频道码」，在右侧玩家卡片填写你的「玩家名称 / 角色名」，然后点击「申请以玩家身份进入房间」。',
-          tip: '提示：等待主持人端点击通过后，你的页面会自动跳转到玩家收听台。'
+          title: '第一步：输入房间码直接进入房间',
+          desc: '在入口大厅输入主持人发给你的「房间频道码」，在右侧玩家卡片填写你的「玩家名称 / 角色名」，然后点击「以玩家身份进入房间」即可直接连线进入。',
+          tip: '提示：如果提示房间不存在，请提醒主持人先以主持人身份开启该房间码。'
         },
         {
           title: '第二步：校准音频与调节个人总音量',
@@ -1365,6 +1403,8 @@
     }
 
     window.onLobbyRoomCodeChange = function(val) {
+      const errBanner = document.getElementById('lobby-room-error-banner');
+      if (errBanner) errBanner.classList.add('hidden');
       const cleaned = (val || '').trim() || 'TRPG-8842';
       state.roomCode = cleaned;
       state.dmHolderId = '';
@@ -1388,6 +1428,14 @@
       state.role = 'dm';
       state.dmHolderId = CLIENT_SESSION_ID;
       state.viewStage = 'in_room';
+      // Load this specific room's theme or clean default theme
+      if (state.themesByRoom && state.themesByRoom[state.roomCode]) {
+        state.theme = Object.assign(getDefaultTheme(), state.themesByRoom[state.roomCode]);
+      } else {
+        state.theme = getDefaultTheme();
+      }
+      syncThemeModalInputs();
+      applyThemeToDOM();
       initHostPeerServer();
       broadcastRoomState();
       renderAll();
@@ -1407,9 +1455,15 @@
         return;
       }
 
+      const errBanner = document.getElementById('lobby-room-error-banner');
+      if (errBanner) errBanner.classList.add('hidden');
+
       ensureAudioContext();
       state.playerName = playerName;
       state.role = 'player';
+      state.theme = getDefaultTheme();
+      applyThemeToDOM();
+
       try {
         window.localStorage.setItem('trpg_player_prefs_v5', JSON.stringify({
           roomCode: state.roomCode,
@@ -1419,35 +1473,23 @@
       document.getElementById('player-req-sender').value = playerName;
       document.getElementById('player-self-name-display').textContent = playerName;
 
+      const btnPlayer = document.getElementById('btn-enter-as-player');
+      if (btnPlayer) {
+        btnPlayer.disabled = true;
+        btnPlayer.textContent = '正在查找并连接房间...';
+      }
+
       const joinPacket = {
         joinId: 'join_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5),
         playerName: playerName,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       };
 
-      state.viewStage = 'player_waiting';
-      saveSessionState();
-      renderAll();
-
-      // Reset waiting UI to "connecting/searching room"
-      const waitTitle = document.getElementById('waiting-title-text');
-      const waitBadge = document.getElementById('waiting-badge-text');
-      const waitMsg = document.getElementById('waiting-status-message');
-      if (waitBadge) {
-        waitBadge.textContent = 'CONNECTING TO ROOM';
-        waitBadge.className = 'text-xs font-mono-code uppercase tracking-widest text-amber-400';
-      }
-      if (waitTitle) waitTitle.textContent = '正在连接房间并等待主持人准许...';
-      if (waitMsg) {
-        waitMsg.textContent = '正在查找房间码「' + state.roomCode + '」的主持人，请稍候...';
-        waitMsg.className = 'text-xs text-zinc-400 leading-relaxed pt-1';
-      }
-
       connectPlayerToHostPeer(joinPacket);
       sendPacketToRoom({
-        type: 'PLAYER_JOIN_REQ',
+        type: 'PLAYER_DIRECT_JOIN',
         roomCode: state.roomCode,
-        joinReq: joinPacket
+        playerName: playerName
       });
     };
 
@@ -1493,6 +1535,8 @@
       }
       peerConnections = [];
       state.viewStage = 'lobby';
+      state.theme = getDefaultTheme();
+      applyThemeToDOM();
       try { window.sessionStorage.removeItem('trpg_audio_session_v5'); } catch (e) {}
       broadcastRoomState();
       renderAll();
@@ -1607,28 +1651,48 @@
 
     let hostFoundViaAnyChannel = false;
 
+    function completePlayerRoomEntry() {
+      hostFoundViaAnyChannel = true;
+      const btnPlayer = document.getElementById('btn-enter-as-player');
+      if (btnPlayer) {
+        btnPlayer.disabled = false;
+        btnPlayer.textContent = '以玩家身份进入房间';
+      }
+      const errBanner = document.getElementById('lobby-room-error-banner');
+      if (errBanner) errBanner.classList.add('hidden');
+
+      if (state.viewStage !== 'in_room') {
+        state.viewStage = 'in_room';
+        saveSessionState();
+        renderAll();
+        showToast('已进入房间：' + state.roomCode, 'success');
+        if (!state.tutorialSeenPlayer) {
+          openTutorialModal('player');
+        }
+      }
+    }
+
     function showRoomNotFoundError() {
-      if (hostFoundViaAnyChannel || state.viewStage !== 'player_waiting') return;
-      const waitBadge = document.getElementById('waiting-badge-text');
-      const waitTitle = document.getElementById('waiting-title-text');
-      const waitMsg = document.getElementById('waiting-status-message');
-      if (waitBadge) {
-        waitBadge.textContent = 'ROOM NOT FOUND';
-        waitBadge.className = 'text-xs font-mono-code uppercase tracking-widest text-rose-400';
+      if (hostFoundViaAnyChannel) return;
+      const btnPlayer = document.getElementById('btn-enter-as-player');
+      if (btnPlayer) {
+        btnPlayer.disabled = false;
+        btnPlayer.textContent = '以玩家身份进入房间';
       }
-      if (waitTitle) {
-        waitTitle.textContent = '房间不存在';
+      const errBanner = document.getElementById('lobby-room-error-banner');
+      if (errBanner) {
+        errBanner.textContent = '房间不存在：未找到房间码「' + state.roomCode + '」的主持人，请确认房间码或提醒主持人先创建房间。';
+        errBanner.classList.remove('hidden');
       }
-      if (waitMsg) {
-        waitMsg.textContent = '未找到房间码「' + state.roomCode + '」的主持人。请确认房间码是否拼写正确，或提醒主持人先以「主持人身份」创建该房间。';
-        waitMsg.className = 'text-xs text-rose-300 leading-relaxed pt-1';
-      }
-      showToast('房间不存在：未找到房间码 [' + state.roomCode + '] 的主持人', 'warn');
+      showToast('房间不存在：主持人尚未创建该房间', 'warn');
     }
 
     function connectPlayerToHostPeer(joinPacket) {
       hostFoundViaAnyChannel = false;
-      if (typeof Peer === 'undefined') return;
+      if (typeof Peer === 'undefined') {
+        showRoomNotFoundError();
+        return;
+      }
       if (peerInstance) {
         try { peerInstance.destroy(); } catch (e) {}
       }
@@ -1639,24 +1703,12 @@
           const conn = peerInstance.connect(hostId, { reliable: true });
           peerConnections = [conn];
           conn.on('open', () => {
-            hostFoundViaAnyChannel = true;
-            const waitBadge = document.getElementById('waiting-badge-text');
-            const waitTitle = document.getElementById('waiting-title-text');
-            const waitMsg = document.getElementById('waiting-status-message');
-            if (waitBadge) {
-              waitBadge.textContent = 'WAITING FOR HOST APPROVAL';
-              waitBadge.className = 'text-xs font-mono-code uppercase tracking-widest text-amber-400';
-            }
-            if (waitTitle) waitTitle.textContent = '已连线房间，等待主持人准许';
-            if (waitMsg) {
-              waitMsg.textContent = '你的入房申请已发送给房间「' + state.roomCode + '」的主持人，点击准许后将自动进入。';
-              waitMsg.className = 'text-xs text-zinc-400 leading-relaxed pt-1';
-            }
             conn.send({
-              type: 'PLAYER_JOIN_REQ',
+              type: 'PLAYER_DIRECT_JOIN',
               roomCode: state.roomCode,
-              joinReq: joinPacket
+              playerName: joinPacket ? joinPacket.playerName : state.playerName
             });
+            completePlayerRoomEntry();
           });
           conn.on('data', (data) => {
             hostFoundViaAnyChannel = true;
@@ -1669,7 +1721,7 @@
               if (!hostFoundViaAnyChannel) {
                 showRoomNotFoundError();
               }
-            }, 600);
+            }, 500);
           }
         });
         peerInstance.on('call', (call) => {
@@ -1747,6 +1799,18 @@
         return;
       }
 
+      if (data.type === 'PLAYER_DIRECT_JOIN' && data.playerName) {
+        if (state.role === 'dm' && state.viewStage === 'in_room') {
+          if (!state.approvedPlayers.includes(data.playerName)) {
+            state.approvedPlayers.push(data.playerName);
+            showToast('玩家 [' + data.playerName + '] 已进入房间', 'info');
+          }
+          broadcastRoomState();
+          renderAll();
+        }
+        return;
+      }
+
       if (data.type === 'PLAYER_JOIN_REQ' && data.joinReq) {
         const pName = data.joinReq.playerName;
         // If this player name was already approved previously by the DM, auto-approve immediately
@@ -1815,8 +1879,10 @@
         if (typeof data.dmHolderId === 'string') {
           state.dmHolderId = data.dmHolderId;
         }
-        state.theme = data.theme || state.theme;
-        applyThemeToDOM();
+        if (state.viewStage === 'in_room' && state.role === 'player' && data.theme) {
+          state.theme = Object.assign(getDefaultTheme(), data.theme);
+          applyThemeToDOM();
+        }
 
         if (Array.isArray(data.tracks)) {
           data.tracks.forEach(incoming => {
@@ -1950,7 +2016,7 @@
           tutorialSeenPlayer: state.tutorialSeenPlayer,
           approvedPlayersByRoom: state.approvedPlayersByRoom,
           approvedPlayers: state.approvedPlayers,
-          theme: state.theme,
+          themesByRoom: state.themesByRoom,
           folders: state.folders,
           scenes: state.scenes.map(s => ({
             id: s.id,
@@ -2018,6 +2084,13 @@
 
         if (state.role === 'dm' && state.viewStage === 'in_room') {
           state.dmHolderId = CLIENT_SESSION_ID;
+          if (state.themesByRoom && state.themesByRoom[state.roomCode]) {
+            state.theme = Object.assign(getDefaultTheme(), state.themesByRoom[state.roomCode]);
+          } else {
+            state.theme = getDefaultTheme();
+          }
+          syncThemeModalInputs();
+          applyThemeToDOM();
           initHostPeerServer();
           showToast('已自动恢复主持人房间', 'info');
         } else if (state.role === 'player') {
@@ -2057,7 +2130,9 @@
         } else if (Array.isArray(parsed.approvedPlayers)) {
           state.approvedPlayers = parsed.approvedPlayers;
         }
-        if (parsed.theme) state.theme = Object.assign(state.theme, parsed.theme);
+        if (parsed.themesByRoom && typeof parsed.themesByRoom === 'object') {
+          state.themesByRoom = parsed.themesByRoom;
+        }
         if (Array.isArray(parsed.folders) && parsed.folders.length) state.folders = parsed.folders;
         if (Array.isArray(parsed.scenes)) {
           state.scenes = parsed.scenes.map(s => Object.assign({}, s, { active: false }));
@@ -2584,6 +2659,7 @@
       reader.onload = (e) => {
         state.theme.bgImage = e.target.result;
         document.getElementById('theme-bg-url').value = '';
+        saveCurrentRoomTheme();
         applyThemeToDOM();
         broadcastRoomState();
         showToast('房间背景图片已更新并同步给玩家', 'success');
@@ -2593,9 +2669,14 @@
 
     window.clearThemeBgImage = function() {
       state.theme.bgImage = '';
-      document.getElementById('theme-bg-url').value = '';
+      const urlEl = document.getElementById('theme-bg-url');
+      if (urlEl) urlEl.value = '';
+      const fileEl = document.getElementById('theme-bg-file');
+      if (fileEl) fileEl.value = '';
+      saveCurrentRoomTheme();
       applyThemeToDOM();
       broadcastRoomState();
+      showToast('已删除背景图片并恢复默认深色背景', 'info');
     };
 
     window.previewThemeChanges = function() {
@@ -2618,6 +2699,7 @@
         state.theme.bgBlur = parseInt(blurInput.value, 10) || 0;
         document.getElementById('bg-blur-val').textContent = state.theme.bgBlur + 'px';
       }
+      saveCurrentRoomTheme();
       applyThemeToDOM();
       broadcastRoomState();
     };
@@ -2797,8 +2879,8 @@
 
       if (approvedSummary) {
         approvedSummary.textContent = state.approvedPlayers.length > 0
-          ? '当前已准入玩家：' + state.approvedPlayers.join(' / ')
-          : '当前已准入玩家：暂无';
+          ? '当前在线玩家：' + state.approvedPlayers.join(' / ')
+          : '当前在线玩家：暂无';
       }
 
       if (state.viewStage === 'lobby') {
