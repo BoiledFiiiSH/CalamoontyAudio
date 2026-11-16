@@ -1112,6 +1112,14 @@
           if (audioCtx.createMediaStreamDestination) {
             streamDestNode = audioCtx.createMediaStreamDestination();
             masterGainNode.connect(streamDestNode);
+            try {
+              const keepAliveOsc = audioCtx.createOscillator();
+              const keepAliveGain = audioCtx.createGain();
+              keepAliveGain.gain.value = 0.00001;
+              keepAliveOsc.connect(keepAliveGain);
+              keepAliveGain.connect(streamDestNode);
+              keepAliveOsc.start();
+            } catch (e) {}
           }
         }
       }
@@ -1139,7 +1147,7 @@
       Object.keys(activeNodes).forEach(tid => {
         const node = activeNodes[tid];
         const track = state.tracks.find(t => t.id === tid);
-        if (node && node.audioEl && track) {
+        if (node && node.audioEl && track && !node.mediaSourceConnected) {
           node.audioEl.volume = Math.min(1, Math.max(0, (track.volume / 100) * getEffectiveMasterVolume()));
         }
       });
@@ -1217,12 +1225,35 @@
       }
       trackGain.connect(masterGainNode);
 
+      // On Player side, audio comes from the DM's live WebRTC mixed stream (#remote-webrtc-audio).
+      // Do NOT play any fallback oscillator tone on the Player side.
+      if (state.role === 'player') {
+        activeNodes[track.id] = {
+          gainNode: trackGain,
+          stopFn: () => {}
+        };
+        return;
+      }
+
       if (track.audioUrl) {
         const audioEl = new Audio();
-        audioEl.crossOrigin = 'anonymous';
+        const isLocalBlobOrData = track.audioUrl.startsWith('blob:') || track.audioUrl.startsWith('data:');
+        if (!isLocalBlobOrData) {
+          audioEl.crossOrigin = 'anonymous';
+        }
         audioEl.src = track.audioUrl;
         audioEl.loop = track.loop !== false;
-        audioEl.volume = Math.min(1, targetVol * getEffectiveMasterVolume());
+
+        let mediaSourceConnected = false;
+        try {
+          const mediaSource = audioCtx.createMediaElementSource(audioEl);
+          mediaSource.connect(trackGain);
+          mediaSourceConnected = true;
+          audioEl.volume = 1.0; // Volume & fade controlled by trackGain -> masterGainNode -> streamDestNode
+        } catch (e) {
+          audioEl.volume = Math.min(1, targetVol * getEffectiveMasterVolume());
+        }
+
         audioEl.addEventListener('loadedmetadata', () => {
           if (audioEl.duration && isFinite(audioEl.duration)) {
             track.duration = Math.floor(audioEl.duration);
@@ -1240,6 +1271,7 @@
         activeNodes[track.id] = {
           gainNode: trackGain,
           audioEl: audioEl,
+          mediaSourceConnected: mediaSourceConnected,
           stopFn: () => {
             audioEl.pause();
             audioEl.src = '';
@@ -1248,21 +1280,9 @@
         return;
       }
 
-      // Fallback subtle ambient pad if an online link without direct file stream is played
-      const osc = audioCtx.createOscillator();
-      const subGain = audioCtx.createGain();
-      osc.type = 'sine';
-      osc.frequency.value = 220;
-      subGain.gain.value = 0.08;
-      osc.connect(subGain);
-      subGain.connect(trackGain);
-      osc.start();
-
       activeNodes[track.id] = {
         gainNode: trackGain,
-        stopFn: () => {
-          try { osc.stop(); } catch (e) {}
-        }
+        stopFn: () => {}
       };
     }
 
@@ -1320,7 +1340,7 @@
             if (entry.gainNode && audioCtx) {
               entry.gainNode.gain.setTargetAtTime(Math.max(0.0001, track.volume / 100), audioCtx.currentTime, 0.06);
             }
-            if (entry.audioEl) {
+            if (entry.audioEl && !entry.mediaSourceConnected) {
               entry.audioEl.volume = Math.min(1, (track.volume / 100) * getEffectiveMasterVolume());
             }
           }
@@ -1416,6 +1436,7 @@
       }
 
       state.viewStage = 'player_waiting';
+      saveSessionState();
       connectPlayerToHostPeer(joinPacket);
       sendPacketToRoom({
         type: 'PLAYER_JOIN_REQ',
@@ -1466,6 +1487,7 @@
       }
       peerConnections = [];
       state.viewStage = 'lobby';
+      try { window.sessionStorage.removeItem('trpg_audio_session_v5'); } catch (e) {}
       broadcastRoomState();
       renderAll();
     };
@@ -1870,6 +1892,68 @@
         };
         window.localStorage.setItem('trpg_audio_studio_v5', JSON.stringify(serializable));
       } catch (e) {}
+      saveSessionState();
+    }
+
+    function saveSessionState() {
+      try {
+        window.sessionStorage.setItem('trpg_audio_session_v5', JSON.stringify({
+          viewStage: state.viewStage,
+          role: state.role,
+          roomCode: state.roomCode,
+          playerName: state.playerName,
+          approvedPlayers: state.approvedPlayers
+        }));
+      } catch (e) {}
+    }
+
+    function restoreSessionState() {
+      try {
+        const raw = window.sessionStorage.getItem('trpg_audio_session_v5');
+        if (!raw) return false;
+        const sess = JSON.parse(raw);
+        if (!sess || !sess.viewStage || sess.viewStage === 'lobby') return false;
+
+        if (sess.roomCode) {
+          state.roomCode = sess.roomCode;
+          const lobbyInput = document.getElementById('lobby-room-code-input');
+          if (lobbyInput) lobbyInput.value = sess.roomCode;
+          const rcInput = document.getElementById('room-code-input');
+          if (rcInput) rcInput.value = sess.roomCode;
+          const headerRc = document.getElementById('header-room-code-text');
+          if (headerRc) headerRc.textContent = sess.roomCode;
+          const playerRc = document.getElementById('player-room-code-label');
+          if (playerRc) playerRc.textContent = sess.roomCode;
+        }
+        if (Array.isArray(sess.approvedPlayers)) {
+          state.approvedPlayers = sess.approvedPlayers;
+        }
+        state.role = sess.role || 'dm';
+        state.playerName = sess.playerName || '';
+        state.viewStage = sess.viewStage;
+
+        if (state.role === 'dm' && state.viewStage === 'in_room') {
+          state.dmHolderId = CLIENT_SESSION_ID;
+          initHostPeerServer();
+          showToast('已自动恢复主持人房间', 'info');
+        } else if (state.role === 'player') {
+          const senderEl = document.getElementById('player-req-sender');
+          if (senderEl) senderEl.value = state.playerName;
+          const selfNameEl = document.getElementById('player-self-name-display');
+          if (selfNameEl) selfNameEl.textContent = state.playerName;
+          connectPlayerToHostPeer({
+            joinId: 'join_restore_' + Date.now(),
+            playerName: state.playerName,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          });
+          if (state.viewStage === 'in_room') {
+            showToast('已恢复玩家房间，请点击「校准并激活音频」继续收听', 'info');
+          }
+        }
+        return true;
+      } catch (e) {
+        return false;
+      }
     }
 
     function loadStateFromLocalStorage() {
@@ -1948,7 +2032,7 @@
         if (entry.gainNode && audioCtx) {
           entry.gainNode.gain.setTargetAtTime(Math.max(0.0001, track.volume / 100), audioCtx.currentTime, 0.05);
         }
-        if (entry.audioEl) {
+        if (entry.audioEl && !entry.mediaSourceConnected) {
           entry.audioEl.volume = Math.min(1, (track.volume / 100) * getEffectiveMasterVolume());
         }
       }
@@ -3024,7 +3108,10 @@
       loadStateFromLocalStorage();
       restoreBlobsFromIndexedDB();
       applyThemeToDOM();
-      probeRoomHostOccupancy();
+      const restored = restoreSessionState();
+      if (!restored) {
+        probeRoomHostOccupancy();
+      }
       renderAll();
       startProgressTicker();
     });
