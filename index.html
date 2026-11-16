@@ -207,7 +207,7 @@
       <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div class="space-y-3">
           <div class="text-xs font-mono-code uppercase tracking-widest text-zinc-500">
-            TRPG AUDIO SYNC SYSTEM · v2.4
+            TRPG AUDIO SYNC SYSTEM · v2.6
           </div>
           <h1 class="text-3xl sm:text-4xl font-light text-white tracking-tight">
             进入跑团音频房间
@@ -344,7 +344,7 @@
           </span>
           <span class="text-zinc-600">·</span>
           <span class="text-xs font-mono-code text-zinc-400">
-            v2.4 · ROOM <strong id="header-room-code-text" class="text-zinc-200 font-normal">TRPG-8842</strong>
+            v2.6 · ROOM <strong id="header-room-code-text" class="text-zinc-200 font-normal">TRPG-8842</strong>
           </span>
         </div>
         <h1 id="room-title-display" class="text-2xl sm:text-3xl font-light text-white tracking-tight">
@@ -451,6 +451,13 @@
               静音
             </button>
             <input id="player-master-slider" type="range" min="0" max="150" value="100" oninput="onPlayerMasterVolumeChange(this.value)" class="accent-slider" />
+          </div>
+
+          <div class="flex items-center justify-between pt-4 border-t border-white/10 text-xs text-zinc-400">
+            <span id="player-cache-size-label">本地音频缓存：计算中...</span>
+            <button onclick="clearLocalAudioCache()" class="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-rose-500/20 text-zinc-300 hover:text-rose-200 border border-white/10 transition">
+              清理本地音频缓存
+            </button>
           </div>
         </div>
       </div>
@@ -831,6 +838,9 @@
               导入恢复备份
               <input type="file" accept=".json" onchange="importRepoBackup(this)" class="hidden" />
             </label>
+            <button onclick="clearLocalAudioCache()" class="px-4 py-2.5 rounded-xl font-medium bg-rose-500/15 hover:bg-rose-500/25 text-rose-200 border border-rose-500/20">
+              清理本地音频缓存
+            </button>
           </div>
         </div>
       </div>
@@ -1259,9 +1269,9 @@
       }
       trackGain.connect(masterGainNode);
 
-      // On Player side, audio comes from the DM's live WebRTC mixed stream (#remote-webrtc-audio).
-      // Do NOT play any fallback oscillator tone on the Player side.
-      if (state.role === 'player') {
+      // On Player side: if the track audio is already cached/synced locally (or is a direct URL),
+      // play it directly in full stereo with ZERO network stutter!
+      if (state.role === 'player' && !track.audioUrl) {
         activeNodes[track.id] = {
           gainNode: trackGain,
           stopFn: () => {}
@@ -1418,7 +1428,21 @@
       renderLobbyState();
     };
 
+    function syncRoomCodeFromLobbyInput() {
+      const lobbyIn = document.getElementById('lobby-room-code-input');
+      const cleaned = (lobbyIn && lobbyIn.value ? lobbyIn.value.trim() : '') || state.roomCode || 'TRPG-8842';
+      state.roomCode = cleaned;
+      const rcIn = document.getElementById('room-code-input');
+      if (rcIn) rcIn.value = cleaned;
+      const hRc = document.getElementById('header-room-code-text');
+      if (hRc) hRc.textContent = cleaned;
+      const pRc = document.getElementById('player-room-code-label');
+      if (pRc) pRc.textContent = cleaned;
+      return cleaned;
+    }
+
     window.enterRoomAsDM = function() {
+      syncRoomCodeFromLobbyInput();
       if (isDmSeatTakenByOther()) {
         showToast('当前房间已有主持人在线，无法重复选择主持人端', 'warn');
         renderLobbyState();
@@ -1447,6 +1471,7 @@
     };
 
     window.requestEnterRoomAsPlayer = function() {
+      syncRoomCodeFromLobbyInput();
       const nameInput = document.getElementById('lobby-player-name-input');
       const playerName = (nameInput.value || '').trim();
       if (!playerName) {
@@ -1605,11 +1630,62 @@
       });
     }
 
+    let probePeer = null;
+    let probeTimer = null;
+
     function probeRoomHostOccupancy() {
+      // 1. Check same-browser tabs via BroadcastChannel
       sendPacketToRoom({
         type: 'WHO_IS_HOST',
         roomCode: state.roomCode
       });
+
+      // 2. Check remote computers via PeerJS (debounced)
+      if (probeTimer) clearTimeout(probeTimer);
+      probeTimer = setTimeout(() => {
+        if (state.viewStage !== 'lobby' || typeof Peer === 'undefined') return;
+        if (probePeer) {
+          try { probePeer.destroy(); } catch (e) {}
+          probePeer = null;
+        }
+        const targetRoom = state.roomCode;
+        try {
+          probePeer = new Peer(undefined, {
+            config: {
+              iceServers: [
+                { urls: 'stun:stun.qq.com:3478' },
+                { urls: 'stun:stun.miwifi.com:3478' },
+                { urls: 'stun:stun.cloudflare.com:3478' },
+                { urls: 'stun:stun.l.google.com:19302' }
+              ]
+            }
+          });
+          probePeer.on('open', () => {
+            if (state.viewStage !== 'lobby' || state.roomCode !== targetRoom) {
+              try { probePeer.destroy(); } catch (e) {}
+              return;
+            }
+            const hostId = getHostPeerId(targetRoom);
+            const conn = probePeer.connect(hostId, { reliable: true });
+            conn.on('open', () => {
+              if (state.roomCode === targetRoom) {
+                state.dmHolderId = 'other_remote_host';
+                renderLobbyState();
+              }
+              try { conn.close(); probePeer.destroy(); } catch (e) {}
+            });
+          });
+          probePeer.on('error', (err) => {
+            if (err && err.type === 'peer-unavailable') {
+              if (state.roomCode === targetRoom && state.dmHolderId === 'other_remote_host') {
+                state.dmHolderId = '';
+                renderLobbyState();
+              }
+            }
+            try { probePeer.destroy(); } catch (e) {}
+          });
+        } catch (e) {}
+      }, 350);
     }
 
     function initHostPeerServer() {
@@ -1619,8 +1695,18 @@
         try { peerInstance.destroy(); } catch (e) {}
       }
       try {
+        const PEER_CONFIG = {
+          config: {
+            iceServers: [
+              { urls: 'stun:stun.qq.com:3478' },
+              { urls: 'stun:stun.miwifi.com:3478' },
+              { urls: 'stun:stun.cloudflare.com:3478' },
+              { urls: 'stun:stun.l.google.com:19302' }
+            ]
+          }
+        };
         const hostId = getHostPeerId(state.roomCode);
-        peerInstance = new Peer(hostId);
+        peerInstance = new Peer(hostId, PEER_CONFIG);
         peerInstance.on('open', () => {
           const badge = document.getElementById('sync-status-badge');
           if (badge) badge.textContent = 'ONLINE';
@@ -1632,7 +1718,7 @@
           });
           conn.on('open', () => {
             broadcastRoomState();
-            // Stream live mixed Web Audio to connected player if supported
+            pushAllLocalAudioFilesToConn(conn);
             if (streamDestNode && streamDestNode.stream && peerInstance) {
               try {
                 peerInstance.call(conn.peer, streamDestNode.stream);
@@ -1643,7 +1729,17 @@
         peerInstance.on('error', (err) => {
           if (err && err.type === 'unavailable-id') {
             state.dmHolderId = 'other_remote_host';
-            renderLobbyState();
+            state.viewStage = 'lobby';
+            try { window.sessionStorage.removeItem('trpg_audio_session_v5'); } catch (e) {}
+            try { peerInstance.destroy(); } catch (e) {}
+            peerInstance = null;
+            renderAll();
+            const errBanner = document.getElementById('lobby-room-error-banner');
+            if (errBanner) {
+              errBanner.textContent = '房间「' + state.roomCode + '」已有主持人在线，无法再以主持人身份进入。';
+              errBanner.classList.remove('hidden');
+            }
+            showToast('该房间已有主持人在线，已锁定主持人入口', 'warn');
           }
         });
       } catch (e) {}
@@ -1697,7 +1793,16 @@
         try { peerInstance.destroy(); } catch (e) {}
       }
       try {
-        peerInstance = new Peer();
+        peerInstance = new Peer(undefined, {
+          config: {
+            iceServers: [
+              { urls: 'stun:stun.qq.com:3478' },
+              { urls: 'stun:stun.miwifi.com:3478' },
+              { urls: 'stun:stun.cloudflare.com:3478' },
+              { urls: 'stun:stun.l.google.com:19302' }
+            ]
+          }
+        });
         peerInstance.on('open', () => {
           const hostId = getHostPeerId(state.roomCode);
           const conn = peerInstance.connect(hostId, { reliable: true });
@@ -1730,9 +1835,11 @@
             const remoteAudio = document.getElementById('remote-webrtc-audio');
             if (remoteAudio) {
               remoteAudio.srcObject = remoteStream;
-              remoteAudio.volume = Math.min(1, Math.max(0, getEffectiveMasterVolume()));
+              const hasLocalSyncedPlaying = state.tracks.some(t => t.playing && t.audioUrl);
+              remoteAudio.volume = hasLocalSyncedPlaying ? 0 : Math.min(1, Math.max(0, getEffectiveMasterVolume()));
               remoteAudio.play().catch(() => {});
             }
+            refreshCacheSizeDisplay();
             const stEl = document.getElementById('player-stream-status');
             if (stEl) {
               stEl.textContent = '已连接主持人实时混音流';
@@ -1741,6 +1848,59 @@
           });
         });
       } catch (e) {}
+    }
+
+    const incomingAudioChunks = {}; // trackId -> { total, chunks: [], mime, name }
+
+    async function getTrackBlobFromDB(trackId) {
+      const db = await openAudioDB();
+      if (!db) return null;
+      return new Promise((resolve) => {
+        try {
+          const tx = db.transaction(DB_STORE, 'readonly');
+          const req = tx.objectStore(DB_STORE).get(trackId);
+          req.onsuccess = () => resolve(req.result ? req.result.blob : null);
+          req.onerror = () => resolve(null);
+        } catch (e) { resolve(null); }
+      });
+    }
+
+    async function pushTrackFileToConn(track, conn) {
+      if (!conn || !conn.open || track.sourceType !== 'file') return;
+      const blob = await getTrackBlobFromDB(track.id);
+      if (!blob) return;
+      try {
+        const buf = await blob.arrayBuffer();
+        const bytes = new Uint8Array(buf);
+        const CHUNK_SIZE = 48 * 1024; // 48KB per chunk
+        const total = Math.ceil(bytes.length / CHUNK_SIZE);
+        for (let i = 0; i < total; i++) {
+          const slice = bytes.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
+          let binary = '';
+          for (let j = 0; j < slice.length; j++) binary += String.fromCharCode(slice[j]);
+          conn.send({
+            type: 'AUDIO_FILE_CHUNK',
+            roomCode: state.roomCode,
+            trackId: track.id,
+            mime: blob.type || 'audio/mpeg',
+            index: i,
+            total: total,
+            dataB64: btoa(binary)
+          });
+        }
+      } catch (e) {}
+    }
+
+    function pushAllLocalAudioFilesToConn(conn) {
+      state.tracks.forEach(t => {
+        if (t.sourceType === 'file') {
+          pushTrackFileToConn(t, conn);
+        }
+      });
+    }
+
+    function pushTrackFileToAllPlayers(track) {
+      peerConnections.forEach(conn => pushTrackFileToConn(track, conn));
     }
 
     function broadcastRoomState() {
@@ -1775,6 +1935,47 @@
 
     function handleIncomingSyncPacket(data) {
       if (!data || data.roomCode !== state.roomCode) return;
+
+      if (data.type === 'AUDIO_FILE_CHUNK') {
+        const tid = data.trackId;
+        if (!incomingAudioChunks[tid]) {
+          incomingAudioChunks[tid] = { total: data.total, received: 0, chunks: new Array(data.total), mime: data.mime };
+        }
+        const entry = incomingAudioChunks[tid];
+        if (!entry.chunks[data.index]) {
+          entry.chunks[data.index] = data.dataB64;
+          entry.received++;
+        }
+        if (entry.received === entry.total) {
+          try {
+            const byteArrays = entry.chunks.map(b64 => {
+              const bin = atob(b64);
+              const arr = new Uint8Array(bin.length);
+              for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+              return arr;
+            });
+            const blob = new Blob(byteArrays, { type: entry.mime || 'audio/mpeg' });
+            saveBlobToIndexedDB(tid, blob);
+            const tr = state.tracks.find(t => t.id === tid);
+            if (tr) {
+              tr.audioUrl = URL.createObjectURL(blob);
+              if (tr.playing) {
+                stopTrackAudioImmediate(tr.id);
+                startTrackAudio(tr);
+                updateMasterGainValue();
+              }
+            }
+            const stEl = document.getElementById('player-stream-status');
+            if (stEl) {
+              const cachedCount = state.tracks.filter(t => t.audioUrl).length;
+              stEl.textContent = '高清本地缓存已同步 (' + cachedCount + '/' + state.tracks.length + ' 首)';
+              stEl.className = 'text-emerald-400';
+            }
+          } catch (e) {}
+          delete incomingAudioChunks[tid];
+        }
+        return;
+      }
 
       if (data.type === 'WHO_IS_HOST') {
         if (state.role === 'dm' && state.viewStage === 'in_room' && state.dmHolderId === CLIENT_SESSION_ID) {
@@ -1997,15 +2198,69 @@
         const req = store.getAll();
         req.onsuccess = () => {
           const items = req.result || [];
+          let totalBytes = 0;
           items.forEach(item => {
+            if (item.blob && item.blob.size) totalBytes += item.blob.size;
             const track = state.tracks.find(t => t.id === item.id);
             if (track && item.blob) {
               track.audioUrl = URL.createObjectURL(item.blob);
             }
           });
+          updateCacheSizeDisplay(totalBytes);
         };
       } catch (e) {}
     }
+
+    function updateCacheSizeDisplay(totalBytes) {
+      const lbl = document.getElementById('player-cache-size-label');
+      if (!lbl) return;
+      const mb = (totalBytes / (1024 * 1024)).toFixed(1);
+      lbl.textContent = '本地音频缓存：' + mb + ' MB';
+    }
+
+    async function refreshCacheSizeDisplay() {
+      const db = await openAudioDB();
+      if (!db) return;
+      try {
+        const tx = db.transaction(DB_STORE, 'readonly');
+        const req = tx.objectStore(DB_STORE).getAll();
+        req.onsuccess = () => {
+          const items = req.result || [];
+          let totalBytes = 0;
+          items.forEach(item => {
+            if (item.blob && item.blob.size) totalBytes += item.blob.size;
+          });
+          updateCacheSizeDisplay(totalBytes);
+        };
+      } catch (e) {}
+    }
+
+    window.clearLocalAudioCache = async function() {
+      const db = await openAudioDB();
+      if (db) {
+        try {
+          const tx = db.transaction(DB_STORE, 'readwrite');
+          tx.objectStore(DB_STORE).clear();
+        } catch (e) {}
+      }
+      state.tracks.forEach(t => {
+        if (t.sourceType === 'file') {
+          t.playing = false;
+          stopTrackAudioImmediate(t.id);
+          if (t.audioUrl && t.audioUrl.startsWith('blob:')) {
+            try { URL.revokeObjectURL(t.audioUrl); } catch (e) {}
+          }
+          t.audioUrl = '';
+        }
+      });
+      if (state.role === 'dm') {
+        state.tracks = state.tracks.filter(t => t.sourceType !== 'file');
+        broadcastRoomState();
+      }
+      updateCacheSizeDisplay(0);
+      renderAll();
+      showToast('已清理本地音频缓存空间', 'success');
+    };
 
     function saveStateToLocalStorage() {
       try {
@@ -2312,6 +2567,7 @@
       });
       closeModal('import-modal');
       broadcastRoomState();
+      peerConnections.forEach(c => pushAllLocalAudioFilesToConn(c));
       renderAll();
       showToast('已成功导入 ' + fileList.length + ' 首本地音频到仓库', 'success');
     };
@@ -2876,6 +3132,11 @@
       const themeBtn = document.getElementById('btn-open-theme');
       const helperBtn = document.getElementById('btn-open-helper');
       const approvedSummary = document.getElementById('approved-players-summary');
+
+      const hRc = document.getElementById('header-room-code-text');
+      if (hRc) hRc.textContent = state.roomCode;
+      const pRc = document.getElementById('player-room-code-label');
+      if (pRc) pRc.textContent = state.roomCode;
 
       if (approvedSummary) {
         approvedSummary.textContent = state.approvedPlayers.length > 0
