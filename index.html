@@ -207,7 +207,7 @@
       <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div class="space-y-3">
           <div class="text-xs font-mono-code uppercase tracking-widest text-zinc-500">
-            TRPG AUDIO SYNC SYSTEM · v2.9
+            TRPG AUDIO SYNC SYSTEM · v3.0
           </div>
           <h1 class="text-3xl sm:text-4xl font-light text-white tracking-tight">
             进入跑团音频房间
@@ -344,7 +344,7 @@
           </span>
           <span class="text-zinc-600">·</span>
           <span class="text-xs font-mono-code text-zinc-400">
-            v2.9 · ROOM <strong id="header-room-code-text" class="text-zinc-200 font-normal">TRPG-8842</strong>
+            v3.0 · ROOM <strong id="header-room-code-text" class="text-zinc-200 font-normal">TRPG-8842</strong>
           </span>
         </div>
         <h1 id="room-title-display" class="text-2xl sm:text-3xl font-light text-white tracking-tight">
@@ -353,6 +353,7 @@
         <p id="approved-players-summary" class="text-xs text-zinc-500">
           当前在线玩家：暂无
         </p>
+        <div id="dm-player-telemetry-bar" class="flex flex-wrap items-center gap-2 pt-1"></div>
       </div>
 
       <!-- Clean Action Links -->
@@ -993,6 +994,8 @@
       pendingJoinRequests: [],
       approvedPlayersByRoom: {},
       approvedPlayers: [],
+      playerTelemetry: {},
+      localPlayerAudioUnlocked: false,
       pendingRequests: [],
       playerHistory: []
     };
@@ -1285,6 +1288,10 @@
       return 1.0;
     }
 
+    function computeTargetElementVolume(track) {
+      return Math.min(1, Math.max(0, (track.volume / 100) * getEffectiveMasterVolume()));
+    }
+
     function updateMasterGainValue() {
       if (masterGainNode && audioCtx) {
         masterGainNode.gain.setTargetAtTime(getEffectiveMasterVolume(), audioCtx.currentTime, 0.05);
@@ -1297,8 +1304,12 @@
       Object.keys(activeNodes).forEach(tid => {
         const node = activeNodes[tid];
         const track = state.tracks.find(t => t.id === tid);
-        if (node && node.audioEl && track && !node.mediaSourceConnected) {
-          node.audioEl.volume = Math.min(1, Math.max(0, (track.volume / 100) * getEffectiveMasterVolume()));
+        if (node && node.audioEl && track) {
+          if (node.fadeTimer) {
+            clearInterval(node.fadeTimer);
+            node.fadeTimer = null;
+          }
+          node.audioEl.volume = computeTargetElementVolume(track);
         }
       });
     }
@@ -1351,9 +1362,110 @@
       broadcastRoomState();
     };
 
+    function mountAndPlayAudioElement(track) {
+      stopTrackAudioImmediate(track.id);
+
+      const audioEl = new Audio();
+      audioEl.preload = 'auto';
+      audioEl.src = track.audioUrl;
+      audioEl.loop = track.loop !== false;
+
+      const finalVol = computeTargetElementVolume(track);
+      let fadeTimer = null;
+
+      if (state.fadeEnabled && finalVol > 0.02) {
+        audioEl.volume = 0.01;
+        const steps = 25;
+        const stepMs = 60; // 25 * 60ms = 1500ms (1.5s smooth fade-in)
+        let curStep = 0;
+        fadeTimer = setInterval(() => {
+          curStep++;
+          const latestTarget = computeTargetElementVolume(track);
+          if (curStep >= steps) {
+            audioEl.volume = latestTarget;
+            clearInterval(fadeTimer);
+            fadeTimer = null;
+          } else {
+            audioEl.volume = Math.min(1, Math.max(0, latestTarget * (curStep / steps)));
+          }
+        }, stepMs);
+      } else {
+        audioEl.volume = finalVol;
+      }
+
+      audioEl.addEventListener('loadedmetadata', () => {
+        if (audioEl.duration && isFinite(audioEl.duration)) {
+          track.duration = Math.floor(audioEl.duration);
+          if (track.currentTime > 0 && track.currentTime < track.duration) {
+            try { audioEl.currentTime = track.currentTime; } catch (e) {}
+          }
+          updateTrackProgressDOM(track);
+        }
+      });
+
+      audioEl.addEventListener('timeupdate', () => {
+        track.currentTime = Math.floor(audioEl.currentTime || 0);
+        updateTrackProgressDOM(track);
+      });
+
+      audioEl.addEventListener('playing', () => {
+        if (state.role === 'player') {
+          state.localPlayerAudioUnlocked = true;
+          reportPlayerStatusToHost('playing');
+        }
+      });
+
+      const nodeEntry = {
+        audioEl: audioEl,
+        fadeTimer: fadeTimer,
+        stopFn: () => {
+          if (nodeEntry.fadeTimer) {
+            clearInterval(nodeEntry.fadeTimer);
+            nodeEntry.fadeTimer = null;
+          }
+          try {
+            audioEl.pause();
+            audioEl.removeAttribute('src');
+            audioEl.load();
+          } catch (e) {}
+        }
+      };
+      activeNodes[track.id] = nodeEntry;
+
+      const playPromise = audioEl.play();
+      if (playPromise && typeof playPromise.catch === 'function') {
+        playPromise.catch((err) => {
+          const isAutoplayBlocked = err && (err.name === 'NotAllowedError' || String(err).includes('NotAllowedError'));
+          if (state.role === 'player') {
+            if (isAutoplayBlocked) {
+              state.localPlayerAudioUnlocked = false;
+              const stEl = document.getElementById('player-stream-status');
+              if (stEl) {
+                stEl.textContent = '请点击右侧「校准并激活音频」以解锁声音';
+                stEl.className = 'text-rose-400 font-medium';
+              }
+              reportPlayerStatusToHost('autoplay_blocked');
+            } else {
+              reportPlayerStatusToHost('load_error');
+            }
+          } else {
+            // Host (DM) side error handling
+            stopTrackAudioImmediate(track.id);
+            track.playing = false;
+            syncSceneStatesWithTracks();
+            renderAll();
+            if (isAutoplayBlocked) {
+              showToast('浏览器拦截了自动播放，请再次点击「播放」按钮', 'warn');
+            } else {
+              showToast('音频无法播放（链接无效或格式不支持）：' + track.name, 'warn');
+            }
+          }
+        });
+      }
+    }
+
     function startTrackAudio(track) {
       ensureAudioContext();
-      if (!audioCtx) return;
       stopTrackAudioImmediate(track.id);
 
       if (typeof track.duration !== 'number' || track.duration <= 0) {
@@ -1363,77 +1475,40 @@
         track.currentTime = 0;
       }
 
-      const targetVol = Math.max(0.0001, (track.volume / 100));
-      const trackGain = audioCtx.createGain();
-      const now = audioCtx.currentTime;
-
-      if (state.fadeEnabled) {
-        trackGain.gain.setValueAtTime(0.0001, now);
-        trackGain.gain.linearRampToValueAtTime(targetVol, now + 1.5);
-      } else {
-        trackGain.gain.setValueAtTime(targetVol, now);
-      }
-      trackGain.connect(masterGainNode);
-
-      // On Player side: if the track audio is already cached/synced locally (or is a direct URL),
-      // play it directly in full stereo with ZERO network stutter!
-      if (state.role === 'player' && !track.audioUrl) {
-        activeNodes[track.id] = {
-          gainNode: trackGain,
-          stopFn: () => {}
-        };
-        return;
-      }
-
       if (track.audioUrl) {
-        const audioEl = new Audio();
-        const isLocalBlobOrData = track.audioUrl.startsWith('blob:') || track.audioUrl.startsWith('data:');
-        if (!isLocalBlobOrData) {
-          audioEl.crossOrigin = 'anonymous';
-        }
-        audioEl.src = track.audioUrl;
-        audioEl.loop = track.loop !== false;
-
-        let mediaSourceConnected = false;
-        try {
-          const mediaSource = audioCtx.createMediaElementSource(audioEl);
-          mediaSource.connect(trackGain);
-          mediaSourceConnected = true;
-          audioEl.volume = 1.0; // Volume & fade controlled by trackGain -> masterGainNode -> streamDestNode
-        } catch (e) {
-          audioEl.volume = Math.min(1, targetVol * getEffectiveMasterVolume());
-        }
-
-        audioEl.addEventListener('loadedmetadata', () => {
-          if (audioEl.duration && isFinite(audioEl.duration)) {
-            track.duration = Math.floor(audioEl.duration);
-            if (track.currentTime > 0 && track.currentTime < track.duration) {
-              audioEl.currentTime = track.currentTime;
-            }
-            updateTrackProgressDOM(track);
-          }
-        });
-        audioEl.addEventListener('timeupdate', () => {
-          track.currentTime = Math.floor(audioEl.currentTime || 0);
-          updateTrackProgressDOM(track);
-        });
-        audioEl.play().catch(() => {});
-        activeNodes[track.id] = {
-          gainNode: trackGain,
-          audioEl: audioEl,
-          mediaSourceConnected: mediaSourceConnected,
-          stopFn: () => {
-            audioEl.pause();
-            audioEl.src = '';
-          }
-        };
+        mountAndPlayAudioElement(track);
         return;
       }
 
-      activeNodes[track.id] = {
-        gainNode: trackGain,
-        stopFn: () => {}
-      };
+      // Safeguard 3: If track.audioUrl is empty (e.g. right after page refresh before IndexedDB finished loading),
+      // look up the Blob from IndexedDB on the fly!
+      if (track.sourceType === 'file') {
+        getTrackBlobFromDB(track.id).then((blob) => {
+          if (blob) {
+            track.audioUrl = URL.createObjectURL(blob);
+            if (track.playing) {
+              mountAndPlayAudioElement(track);
+            }
+          } else {
+            if (state.role === 'dm') {
+              track.playing = false;
+              syncSceneStatesWithTracks();
+              renderAll();
+              showToast('未找到本地音频文件缓存，请重新导入：' + track.name, 'warn');
+            } else {
+              reportPlayerStatusToHost('buffering');
+            }
+          }
+        });
+        return;
+      }
+
+      if (state.role === 'dm') {
+        track.playing = false;
+        syncSceneStatesWithTracks();
+        renderAll();
+        showToast('该曲目缺少有效的音频源（B站视频请先用助手提取音频后导入）：' + track.name, 'warn');
+      }
     }
 
     function stopTrackAudioImmediate(trackId) {
@@ -1447,20 +1522,31 @@
 
     function stopTrackWithOptionalFade(track) {
       const entry = activeNodes[track.id];
-      if (!entry || !audioCtx) {
+      if (!entry || !entry.audioEl) {
         stopTrackAudioImmediate(track.id);
         return;
       }
-      if (state.fadeEnabled && entry.gainNode) {
-        const now = audioCtx.currentTime;
-        entry.gainNode.gain.cancelScheduledValues(now);
-        entry.gainNode.gain.setValueAtTime(entry.gainNode.gain.value, now);
-        entry.gainNode.gain.linearRampToValueAtTime(0.0001, now + 1.2);
-        setTimeout(() => {
-          if (!track.playing) {
-            stopTrackAudioImmediate(track.id);
+      if (entry.fadeTimer) {
+        clearInterval(entry.fadeTimer);
+        entry.fadeTimer = null;
+      }
+      if (state.fadeEnabled && entry.audioEl.volume > 0.02) {
+        const startVol = entry.audioEl.volume;
+        const steps = 20;
+        const stepMs = 55; // ~1.1s smooth fade-out
+        let curStep = 0;
+        entry.fadeTimer = setInterval(() => {
+          curStep++;
+          if (curStep >= steps || track.playing) {
+            clearInterval(entry.fadeTimer);
+            entry.fadeTimer = null;
+            if (!track.playing) {
+              stopTrackAudioImmediate(track.id);
+            }
+          } else {
+            entry.audioEl.volume = Math.max(0, startVol * (1 - curStep / steps));
           }
-        }, 1250);
+        }, stepMs);
       } else {
         stopTrackAudioImmediate(track.id);
       }
@@ -1490,8 +1576,12 @@
             if (entry.gainNode && audioCtx) {
               entry.gainNode.gain.setTargetAtTime(Math.max(0.0001, track.volume / 100), audioCtx.currentTime, 0.06);
             }
-            if (entry.audioEl && !entry.mediaSourceConnected) {
-              entry.audioEl.volume = Math.min(1, (track.volume / 100) * getEffectiveMasterVolume());
+            if (entry.audioEl) {
+              if (entry.fadeTimer) {
+                clearInterval(entry.fadeTimer);
+                entry.fadeTimer = null;
+              }
+              entry.audioEl.volume = computeTargetElementVolume(track);
             }
           }
         } else if (activeNodes[track.id]) {
@@ -1501,14 +1591,66 @@
       syncSceneStatesWithTracks();
     }
 
+    function reportPlayerStatusToHost(overridePlayState) {
+      if (state.role !== 'player' || !state.playerName) return;
+      const fileTracks = state.tracks.filter(t => t.sourceType === 'file');
+      const cachedFiles = fileTracks.filter(t => Boolean(t.audioUrl)).length;
+      const activeTracks = state.tracks.filter(t => t.playing);
+      const activeReady = activeTracks.every(t => Boolean(t.audioUrl));
+      const activelyAudible = activeTracks.length > 0 && activeTracks.some(t => {
+        const node = activeNodes[t.id];
+        return Boolean(node && node.audioEl && !node.audioEl.paused);
+      });
+
+      let playState = overridePlayState || '';
+      if (!playState) {
+        if (!state.localPlayerAudioUnlocked) {
+          playState = 'autoplay_blocked';
+        } else if (activeTracks.length === 0) {
+          playState = 'idle_ready';
+        } else if (!activeReady) {
+          playState = 'buffering';
+        } else if (activelyAudible) {
+          playState = 'playing';
+        } else {
+          playState = 'idle_ready';
+        }
+      }
+
+      sendPacketToRoom({
+        type: 'PLAYER_STATUS_REPORT',
+        roomCode: state.roomCode,
+        playerName: state.playerName,
+        connected: true,
+        cachedCount: cachedFiles,
+        totalFiles: fileTracks.length,
+        activeCount: activeTracks.length,
+        activeReady: activeReady,
+        playState: playState,
+        updatedAt: Date.now()
+      });
+    }
+
     window.unlockBrowserAudio = function() {
       ensureAudioContext();
+      state.localPlayerAudioUnlocked = true;
       const remoteAudio = document.getElementById('remote-webrtc-audio');
       if (remoteAudio && remoteAudio.srcObject) {
         remoteAudio.play().catch(() => {});
       }
-      syncAudioEngineWithState();
-      showToast('音频同步已激活，正在实时接收房间音频流', 'success');
+      // Force restart any currently playing tracks so browser gesture unlocks them immediately
+      state.tracks.forEach(t => {
+        if (t.playing) {
+          startTrackAudio(t);
+        }
+      });
+      const stEl = document.getElementById('player-stream-status');
+      if (stEl) {
+        stEl.textContent = '声音已激活 · 实时同步中';
+        stEl.className = 'text-emerald-400';
+      }
+      reportPlayerStatusToHost();
+      showToast('音频同步已激活，正在实时同步房间音频', 'success');
     };
 
     // =====================================================
@@ -1820,12 +1962,21 @@
         peerInstance.on('connection', (conn) => {
           peerConnections.push(conn);
           conn.on('data', (data) => {
+            if (data && data.playerName) {
+              conn._playerName = data.playerName;
+            }
             if (data && data.type === 'PLAYER_CACHE_INVENTORY' && Array.isArray(data.cachedIds)) {
               conn._cachedTrackIds = new Set(data.cachedIds);
               pushAllLocalAudioFilesToConn(conn);
               return;
             }
             handleIncomingSyncPacket(data);
+          });
+          conn.on('close', () => {
+            if (conn._playerName && state.playerTelemetry[conn._playerName]) {
+              state.playerTelemetry[conn._playerName].connected = false;
+              renderViewStageVisibility();
+            }
           });
           conn.on('open', () => {
             broadcastRoomState();
@@ -1872,6 +2023,7 @@
         state.viewStage = 'in_room';
         saveSessionState();
         renderAll();
+        setTimeout(() => reportPlayerStatusToHost(), 200);
         showToast('已进入房间：' + state.roomCode, 'success');
         if (!state.tutorialSeenPlayer) {
           openTutorialModal('player');
@@ -2162,10 +2314,11 @@
               }
             }
             const stEl = document.getElementById('player-stream-status');
-            if (stEl) {
-              stEl.textContent = '音频同步已就绪';
+            if (stEl && state.localPlayerAudioUnlocked) {
+              stEl.textContent = '声音已激活 · 实时同步中';
               stEl.className = 'text-emerald-400';
             }
+            reportPlayerStatusToHost();
           } catch (e) {}
           delete incomingAudioChunks[tid];
         }
@@ -2195,11 +2348,42 @@
         return;
       }
 
+      if (data.type === 'PLAYER_STATUS_REPORT' && data.playerName) {
+        if (!state.playerTelemetry) state.playerTelemetry = {};
+        state.playerTelemetry[data.playerName] = {
+          connected: data.connected !== false,
+          cachedCount: data.cachedCount || 0,
+          totalFiles: data.totalFiles || 0,
+          activeCount: data.activeCount || 0,
+          activeReady: Boolean(data.activeReady),
+          playState: data.playState || 'idle_ready',
+          updatedAt: Date.now()
+        };
+        if (!state.approvedPlayers.includes(data.playerName)) {
+          state.approvedPlayers.push(data.playerName);
+        }
+        renderViewStageVisibility();
+        return;
+      }
+
       if (data.type === 'PLAYER_DIRECT_JOIN' && data.playerName) {
         if (state.role === 'dm' && state.viewStage === 'in_room') {
           if (!state.approvedPlayers.includes(data.playerName)) {
             state.approvedPlayers.push(data.playerName);
-            showToast('玩家 [' + data.playerName + '] 已进入房间', 'info');
+            showToast('玩家 [' + data.playerName + '] 已连入房间', 'info');
+          }
+          if (!state.playerTelemetry[data.playerName]) {
+            state.playerTelemetry[data.playerName] = {
+              connected: true,
+              cachedCount: 0,
+              totalFiles: state.tracks.filter(t => t.sourceType === 'file').length,
+              activeCount: state.tracks.filter(t => t.playing).length,
+              activeReady: false,
+              playState: 'autoplay_blocked',
+              updatedAt: Date.now()
+            };
+          } else {
+            state.playerTelemetry[data.playerName].connected = true;
           }
           broadcastRoomState();
           renderAll();
@@ -2318,6 +2502,9 @@
         }
         syncAudioEngineWithState();
         renderAll();
+        if (state.role === 'player' && state.viewStage === 'in_room') {
+          setTimeout(() => reportPlayerStatusToHost(), 120);
+        }
       }
     }
 
@@ -2647,13 +2834,12 @@
       if (repoVolSpan) repoVolSpan.textContent = track.volume + '%';
 
       const entry = activeNodes[trackId];
-      if (entry) {
-        if (entry.gainNode && audioCtx) {
-          entry.gainNode.gain.setTargetAtTime(Math.max(0.0001, track.volume / 100), audioCtx.currentTime, 0.05);
+      if (entry && entry.audioEl) {
+        if (entry.fadeTimer) {
+          clearInterval(entry.fadeTimer);
+          entry.fadeTimer = null;
         }
-        if (entry.audioEl && !entry.mediaSourceConnected) {
-          entry.audioEl.volume = Math.min(1, (track.volume / 100) * getEffectiveMasterVolume());
-        }
+        entry.audioEl.volume = computeTargetElementVolume(track);
       }
       broadcastRoomState();
     };
@@ -3339,8 +3525,57 @@
 
       if (approvedSummary) {
         approvedSummary.textContent = state.approvedPlayers.length > 0
-          ? '当前在线玩家：' + state.approvedPlayers.join(' / ')
-          : '当前在线玩家：暂无';
+          ? '房间玩家状态监控 (' + state.approvedPlayers.length + ' 人)：'
+          : '房间玩家状态监控：暂无玩家连入';
+      }
+      const teleBar = document.getElementById('dm-player-telemetry-bar');
+      if (teleBar) {
+        if (state.role !== 'dm' || state.approvedPlayers.length === 0) {
+          teleBar.innerHTML = '';
+        } else {
+          teleBar.innerHTML = state.approvedPlayers.map(pName => {
+            const info = (state.playerTelemetry && state.playerTelemetry[pName]) || {
+              connected: true,
+              cachedCount: 0,
+              totalFiles: state.tracks.filter(t => t.sourceType === 'file').length,
+              activeCount: state.tracks.filter(t => t.playing).length,
+              activeReady: false,
+              playState: 'autoplay_blocked'
+            };
+            const connBadge = info.connected
+              ? '<span class="text-emerald-400">已连接</span>'
+              : '<span class="text-zinc-500">已离线</span>';
+            const totalF = state.tracks.filter(t => t.sourceType === 'file').length;
+            const recvBadge = totalF === 0
+              ? '<span class="text-zinc-400">无本地曲目</span>'
+              : (info.cachedCount >= totalF
+                ? `<span class="text-emerald-400">音频已收齐(${info.cachedCount}/${totalF})</span>`
+                : `<span class="text-amber-300">接收音频中(${info.cachedCount}/${totalF})</span>`);
+            let playBadge = '<span class="text-zinc-400">待机就绪</span>';
+            if (!info.connected) {
+              playBadge = '<span class="text-zinc-500">未播放</span>';
+            } else if (info.playState === 'autoplay_blocked') {
+              playBadge = '<span class="text-rose-400 font-medium">未点激活声音</span>';
+            } else if (info.playState === 'buffering') {
+              playBadge = '<span class="text-amber-300">正在缓冲当前曲目</span>';
+            } else if (info.playState === 'playing') {
+              playBadge = '<span class="text-emerald-400 font-medium">正在同步播放</span>';
+            } else if (info.playState === 'load_error') {
+              playBadge = '<span class="text-rose-400">播放异常</span>';
+            }
+            return `
+              <div class="glass-card px-3 py-1.5 text-[11px] flex items-center gap-2 border border-white/10">
+                <span class="font-medium text-white">${escapeHtml(pName)}</span>
+                <span class="text-zinc-600">|</span>
+                ${connBadge}
+                <span class="text-zinc-600">·</span>
+                ${recvBadge}
+                <span class="text-zinc-600">·</span>
+                ${playBadge}
+              </div>
+            `;
+          }).join('');
+        }
       }
 
       if (state.viewStage === 'lobby') {
