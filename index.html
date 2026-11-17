@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>TRPG Audio Console · 极简跨网同步混音台</title>
+  <title>Calamoonty混音台</title>
   <script src="https://cdn.tailwindcss.com/3.4.17"></script>
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js"></script>
@@ -191,6 +191,68 @@
       background: rgba(255, 255, 255, 0.14);
       border-radius: 999px;
     }
+
+    /* Light Mode Overrides */
+    body.light-mode {
+      background-color: #f4f4f6;
+      color: #18181b;
+    }
+    body.light-mode .glass-panel {
+      background: rgba(255, 255, 255, 0.88);
+      border: 1px solid rgba(0, 0, 0, 0.08);
+      box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.06);
+    }
+    body.light-mode .glass-card {
+      background: rgba(244, 244, 246, 0.85);
+      border: 1px solid rgba(0, 0, 0, 0.07);
+    }
+    body.light-mode .glass-card:hover {
+      background: rgba(236, 236, 240, 0.95);
+      border-color: rgba(0, 0, 0, 0.14);
+    }
+    body.light-mode .glass-card.playing-card {
+      border-color: var(--accent-border);
+      background: linear-gradient(90deg, var(--accent-soft) 0%, rgba(255, 255, 255, 0.92) 100%);
+    }
+    body.light-mode .text-white,
+    body.light-mode .text-zinc-100,
+    body.light-mode .text-zinc-200 {
+      color: #18181b !important;
+    }
+    body.light-mode .text-zinc-300 {
+      color: #3f3f46 !important;
+    }
+    body.light-mode .text-zinc-400,
+    body.light-mode .text-zinc-500,
+    body.light-mode .text-zinc-600 {
+      color: #52525b !important;
+    }
+    body.light-mode .bg-black\/40,
+    body.light-mode .bg-black\/50 {
+      background-color: rgba(255, 255, 255, 0.95) !important;
+      border-color: rgba(0, 0, 0, 0.14) !important;
+      color: #18181b !important;
+    }
+    body.light-mode .bg-white\/5,
+    body.light-mode .bg-white\/10 {
+      background-color: rgba(0, 0, 0, 0.05) !important;
+      border-color: rgba(0, 0, 0, 0.1) !important;
+      color: #27272a !important;
+    }
+    body.light-mode .border-white\/5,
+    body.light-mode .border-white\/10,
+    body.light-mode .border-white\/15,
+    body.light-mode .border-white\/20 {
+      border-color: rgba(0, 0, 0, 0.09) !important;
+    }
+    body.light-mode .badge-accent {
+      color: var(--accent) !important;
+      font-weight: 500;
+    }
+    body.light-mode input[type="range"].accent-slider,
+    body.light-mode input[type="range"].progress-slider {
+      background: rgba(0, 0, 0, 0.14);
+    }
   </style>
 </head>
 <body>
@@ -208,13 +270,13 @@
       <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div class="space-y-3">
           <div class="text-xs font-mono-code uppercase tracking-widest text-zinc-500">
-            TRPG AUDIO SYNC SYSTEM · v3.2
+            CALAMOONTY TRPG AUDIO CONSOLE · v3.4
           </div>
           <h1 class="text-3xl sm:text-4xl font-light text-white tracking-tight">
-            进入跑团音频房间
+            进入共享音频房间
           </h1>
           <p class="text-sm text-zinc-400 max-w-xl leading-relaxed">
-            输入房间码并选择你的终端身份。同一房间仅允许一位主持人在线控制曲库，当主持人席位有人使用时将自动锁定。
+            输入房间码并选择你的身份。同一房间仅允许一位主持人在线控制曲库，当主持人位置有人使用时将自动锁定。
           </p>
         </div>
 
@@ -230,7 +292,7 @@
             STEP 01 / 房间频道码
           </label>
           <span id="lobby-dm-occupancy-badge" class="text-xs font-mono-code px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
-            HOST AVAILABLE · 主持人席位空闲
+            HOST AVAILABLE · 主持人位置空闲
           </span>
         </div>
 
@@ -247,7 +309,7 @@
       <div class="space-y-5">
         <div class="flex items-center justify-between">
           <span class="text-xs font-mono-code uppercase tracking-wider text-zinc-400">
-            STEP 02 / 选择终端身份
+            STEP 02 / 选择身份
           </span>
         </div>
 
@@ -256,12 +318,12 @@
           <div id="lobby-card-dm" class="glass-panel p-8 sm:p-10 flex flex-col justify-between space-y-8">
             <div class="space-y-4">
               <div class="flex items-center justify-between">
-                <span class="text-xs font-mono-code uppercase tracking-widest text-zinc-500">ROLE / HOST</span>
-                <span id="dm-seat-tag" class="text-xs font-mono-code px-2.5 py-0.5 rounded bg-white/5 text-zinc-400">唯一席位</span>
+                <span class="text-xs font-mono-code uppercase tracking-widest text-zinc-500">GAME MASTER</span>
+                <span id="dm-seat-tag" class="text-xs font-mono-code px-2.5 py-0.5 rounded bg-white/5 text-zinc-400">混音台</span>
               </div>
-              <h2 class="text-xl font-medium text-white">主持人端 (DM)</h2>
+              <h2 class="text-xl font-medium text-white">主持人</h2>
               <p class="text-xs text-zinc-400 leading-relaxed">
-                管理本地与在线音频仓库、控制多轨同时混音播放、拖动播放进度、设置房间主题与背景，并审批玩家的入房与投递申请。
+                管理本地与在线音频仓库、控制多轨同时混音播放、拖动播放进度、设置房间主题与背景，审批玩家的音频申请。
               </p>
             </div>
 
@@ -274,12 +336,12 @@
           <div class="glass-panel p-8 sm:p-10 flex flex-col justify-between space-y-8">
             <div class="space-y-4">
               <div class="flex items-center justify-between">
-                <span class="text-xs font-mono-code uppercase tracking-widest text-zinc-500">ROLE / PLAYER</span>
+                <span class="text-xs font-mono-code uppercase tracking-widest text-zinc-500">PLAYER</span>
                 <span class="text-xs font-mono-code px-2.5 py-0.5 rounded bg-white/5 text-zinc-400">同码直连</span>
               </div>
-              <h2 class="text-xl font-medium text-white">玩家端 (Player)</h2>
+              <h2 class="text-xl font-medium text-white">玩家</h2>
               <p class="text-xs text-zinc-400 leading-relaxed">
-                输入与主持人相同的房间码与你的玩家名称，即可直接进入房间同步收听音频、调节音量或投递歌曲。
+                输入你的玩家名称，即可直接进入房间同步收听音频、调节音量或投递歌曲。
               </p>
               <div class="pt-2">
                 <label class="block text-xs text-zinc-400 mb-2">玩家名称 / 角色名</label>
@@ -297,36 +359,7 @@
     </div>
   </main>
 
-  <!-- ========================================================= -->
-  <!-- VIEW 0.5: PLAYER WAITING FOR APPROVAL SCREEN              -->
-  <!-- ========================================================= -->
-  <section id="player-waiting-section" class="app-shell hidden min-h-screen flex items-center justify-center px-6 py-16">
-    <div class="glass-panel max-w-xl w-full p-10 sm:p-12 space-y-8">
-      <div class="space-y-3">
-        <div id="waiting-badge-text" class="text-xs font-mono-code uppercase tracking-widest text-amber-400">
-          WAITING FOR HOST APPROVAL
-        </div>
-        <h2 id="waiting-title-text" class="text-2xl font-light text-white">等待主持人准许进入房间</h2>
-        <p class="text-sm text-zinc-400">
-          申请玩家：<span id="waiting-player-name-label" class="text-white font-medium"></span>
-          <span class="mx-2 text-zinc-600">/</span>
-          房间码：<span id="waiting-room-code-label" class="font-mono-code text-zinc-300"></span>
-        </p>
-        <p id="waiting-status-message" class="text-xs text-zinc-500 leading-relaxed pt-1">
-          你的入房申请已发送至主持人端，主持人点击准许后本页面将自动进入房间。
-        </p>
-      </div>
 
-      <div class="flex items-center justify-between pt-4 border-t border-white/10">
-        <button onclick="openTutorialModal('player')" class="px-4 py-2.5 rounded-xl text-xs text-zinc-300 bg-white/5 hover:bg-white/10 border border-white/10 transition">
-          查看玩家端教程
-        </button>
-        <button onclick="leaveRoomToLobby()" class="px-5 py-2.5 rounded-xl text-xs bg-white/5 hover:bg-white/10 text-zinc-300 border border-white/10 transition">
-          返回入口大厅
-        </button>
-      </div>
-    </div>
-  </section>
 
   <!-- ========================================================= -->
   <!-- MAIN ROOM SHELL                                           -->
@@ -345,11 +378,11 @@
           </span>
           <span class="text-zinc-600">·</span>
           <span class="text-xs font-mono-code text-zinc-400">
-            v3.2 · ROOM <strong id="header-room-code-text" class="text-zinc-200 font-normal">TRPG-8842</strong>
+            v3.4 · ROOM <strong id="header-room-code-text" class="text-zinc-200 font-normal">TRPG-8842</strong>
           </span>
         </div>
         <h1 id="room-title-display" class="text-2xl sm:text-3xl font-light text-white tracking-tight">
-          跑团跨网同步混音台
+          混音台
         </h1>
         <p id="approved-players-summary" class="text-xs text-zinc-500">
           当前在线玩家：暂无
@@ -362,7 +395,7 @@
         <input id="room-code-input" type="hidden" value="TRPG-8842" onchange="updateRoomCode(this.value)" />
 
         <button id="btn-open-import" onclick="openModal('import-modal')" class="px-4 py-2.5 rounded-xl text-xs font-medium btn-accent">
-          + 导入音频或链接
+          + 导入音频
         </button>
 
         <button id="btn-open-theme" onclick="openModal('theme-modal')" class="px-4 py-2.5 rounded-xl text-xs font-medium bg-white/5 hover:bg-white/10 text-zinc-300 border border-white/10 transition">
@@ -370,7 +403,7 @@
         </button>
 
         <button id="btn-open-helper" onclick="openModal('helper-modal')" class="px-4 py-2.5 rounded-xl text-xs font-medium bg-white/5 hover:bg-white/10 text-zinc-300 border border-white/10 transition">
-          B站助手与备份
+          曲库备份
         </button>
 
         <button onclick="openCurrentRoleTutorial()" class="px-4 py-2.5 rounded-xl text-xs font-medium bg-white/5 hover:bg-white/10 text-zinc-300 border border-white/10 transition">
@@ -384,23 +417,12 @@
         <button onclick="reconnectPeerRoom()" class="hidden">连线</button>
 
         <button onclick="leaveRoomToLobby()" class="px-4 py-2.5 rounded-xl text-xs font-medium bg-white/5 hover:bg-rose-500/20 text-zinc-400 hover:text-rose-200 border border-white/10 transition">
-          退出房间
+          返回大厅
         </button>
       </div>
     </header>
 
-    <!-- DM Notification 1: Player Room Entry Approval Banner -->
-    <div id="dm-join-approval-banner" class="hidden glass-panel p-8 border-l-2 border-emerald-400 space-y-5">
-      <div class="flex items-center justify-between">
-        <div class="space-y-1">
-          <div class="text-xs font-mono-code uppercase tracking-wider text-emerald-400">
-            ROOM ENTRY REQUEST (<span id="pending-join-count-num">0</span>)
-          </div>
-          <h2 class="text-base font-medium text-white">收到玩家进入房间申请</h2>
-        </div>
-      </div>
-      <div id="pending-join-list" class="space-y-3"></div>
-    </div>
+
 
     <!-- DM Notification 2: Player Song Request Approval Banner -->
     <div id="dm-approval-banner" class="hidden glass-panel p-8 border-l-2 border-accent space-y-5">
@@ -431,7 +453,7 @@
             <p class="text-xs text-zinc-500">
               频道码 <span id="player-room-code-label" class="font-mono-code text-zinc-300">TRPG-8842</span>
               <span class="mx-1.5">·</span>
-              <span id="player-stream-status" class="text-amber-400">正在等待主持人音频流...</span>
+              <span id="player-stream-status" class="text-amber-400">正在等待主持人播放音频...</span>
             </p>
           </div>
           <button id="btn-unlock-audio" onclick="unlockBrowserAudio()" class="px-5 py-2.5 rounded-xl text-xs font-medium btn-accent">
@@ -439,11 +461,17 @@
           </button>
         </div>
 
+        <!-- Player Self Telemetry Bar (Connection, Cache, Playback Status) -->
+        <div id="player-self-telemetry-bar" class="glass-card px-4 py-3 text-xs flex flex-wrap items-center justify-between gap-2 border border-white/10">
+          <span class="text-zinc-400">我的状态</span>
+          <div id="player-self-telemetry-badges" class="flex flex-wrap items-center gap-2"></div>
+        </div>
+
         <!-- Master Volume Slider Only -->
         <div class="space-y-6">
           <div class="flex items-center justify-between">
             <span id="player-vol-icon" class="text-xs font-mono-code uppercase tracking-wider text-zinc-400">
-              MASTER VOLUME / 整体音量调节
+              VOLUME / 整体音量调节
             </span>
             <span id="player-master-vol-label" class="text-2xl font-mono-code font-light text-white">100%</span>
           </div>
@@ -468,8 +496,7 @@
       <div class="glass-panel overflow-hidden">
         <button onclick="togglePlayerRequestDrawer()" class="w-full px-8 py-6 flex items-center justify-between text-left hover:bg-white/5 transition">
           <div class="space-y-0.5">
-            <div class="text-sm font-medium text-zinc-200">向主持人申请播放歌曲</div>
-            <div class="text-xs text-zinc-500">需要上传本地歌曲或分享在线链接时点击展开</div>
+            <div class="text-sm font-medium text-zinc-200">向主持人申请播放音频</div>
           </div>
           <span id="player-drawer-arrow" class="text-xs font-mono-code text-zinc-400 px-3 py-1.5 rounded-lg bg-white/5">
             展开
@@ -502,25 +529,10 @@
             </div>
           </div>
 
-          <div class="space-y-3">
-            <label class="block text-xs text-zinc-400">音频来源</label>
-            <div class="grid grid-cols-2 gap-4">
-              <label class="glass-card p-4 flex items-center gap-3 cursor-pointer text-xs text-zinc-300">
-                <input type="radio" name="player-source-type" value="file" checked onchange="togglePlayerSourceInput()" />
-                <span>上传本地音频文件</span>
-              </label>
-              <label class="glass-card p-4 flex items-center gap-3 cursor-pointer text-xs text-zinc-300">
-                <input type="radio" name="player-source-type" value="url" onchange="togglePlayerSourceInput()" />
-                <span>在线音频或 B站链接</span>
-              </label>
-            </div>
-
-            <div id="player-file-box" class="pt-2">
+          <div class="space-y-2">
+            <label class="block text-xs text-zinc-400">上传本地音频文件 *</label>
+            <div id="player-file-box" class="pt-1">
               <input id="player-req-file" type="file" accept="audio/*" onchange="onPlayerFileSelected(this)" class="w-full text-xs text-zinc-400 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-medium file:bg-white/10 file:text-white hover:file:bg-white/15" />
-            </div>
-
-            <div id="player-url-box" class="hidden pt-2">
-              <input id="player-req-url" type="text" class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-xs text-white focus:outline-none" placeholder="粘贴音频直链或 Bilibili 链接 / BV号" />
             </div>
           </div>
 
@@ -561,14 +573,40 @@
           </div>
 
           <div class="flex flex-wrap items-center justify-between gap-3 pt-1">
-            <label class="flex items-center gap-2 text-xs text-zinc-400 cursor-pointer">
-              <input id="global-fade-toggle" type="checkbox" checked onchange="toggleGlobalFade(this.checked)" class="rounded" />
-              <span>1.5秒平滑淡入淡出</span>
-            </label>
+            <div class="flex flex-wrap items-center gap-4">
+              <label class="flex items-center gap-2 text-xs text-zinc-400 cursor-pointer">
+                <input id="global-fade-toggle" type="checkbox" checked onchange="toggleGlobalFade(this.checked)" class="rounded" />
+                <span>平滑淡入淡出</span>
+              </label>
+              <label class="flex items-center gap-2 text-xs text-zinc-400 cursor-pointer" title="限制后台传歌带宽在140KB/s以内，优先保障语音清晰">
+                <input id="voice-guard-toggle" type="checkbox" checked onchange="toggleVoiceGuard(this.checked)" class="rounded" />
+                <span>上传限速</span>
+              </label>
+            </div>
 
             <button onclick="saveCurrentSceneModal()" class="text-xs text-zinc-300 hover:text-white underline underline-offset-4 transition">
               保存为场景预设
             </button>
+          </div>
+
+          <!-- Browser Tab Audio Capture Bar (For Bilibili / NetEase / QQ Music online streaming) -->
+          <div class="glass-card p-4 space-y-3 mt-2 border border-white/10">
+            <div class="flex items-center justify-between gap-3 flex-wrap">
+              <div class="space-y-0.5">
+                <div class="text-xs font-medium text-white">网页音频实时广播</div>
+                <div id="tab-capture-status-text" class="text-[11px] text-zinc-500">捕获浏览器其他标签页正在播放的声音并实时同步</div>
+              </div>
+              <button id="btn-tab-audio-share" onclick="toggleTabAudioCapture()" class="px-3.5 py-2 rounded-xl text-xs font-medium bg-white/10 hover:bg-white/15 text-white transition shrink-0">
+                共享标签页音频
+              </button>
+            </div>
+            <div id="tab-capture-volume-row" class="hidden pt-2 border-t border-white/5 space-y-1.5">
+              <div class="flex items-center justify-between text-[11px] font-mono-code text-zinc-400">
+                <span>TAB STREAM GAIN / 标签页广播音量</span>
+                <span id="tab-capture-vol-label" class="text-white">80%</span>
+              </div>
+              <input id="tab-capture-vol-slider" type="range" min="0" max="100" value="80" oninput="onTabCaptureVolumeInput(this.value)" class="accent-slider" />
+            </div>
           </div>
         </div>
 
@@ -659,16 +697,16 @@
 
       <div class="space-y-6 text-xs">
         <div class="glass-card p-6 space-y-3">
-          <div class="text-sm font-medium text-white">方式一：导入本地音频文件（支持多选）</div>
-          <p class="text-zinc-400">支持 MP3 / WAV / OGG / M4A，自动持久化保存在浏览器本地仓库中。</p>
+          <div class="text-sm font-medium text-white">方式一：导入本地音频文件</div>
+          <p class="text-zinc-400">支持 MP3 / WAV / OGG / M4A</p>
           <input id="dm-local-file-input" type="file" accept="audio/*" multiple onchange="handleDmLocalFiles(this.files)" class="w-full text-xs text-zinc-300 pt-1 file:mr-3 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-medium file:bg-white/10 file:text-white hover:file:bg-white/20" />
         </div>
 
         <div class="glass-card p-6 space-y-4">
-          <div class="text-sm font-medium text-white">方式二：添加在线音频直链或 Bilibili 链接</div>
+          <div class="text-sm font-medium text-white">方式二：添加在线音频直链</div>
           <div class="space-y-3">
-            <input id="dm-link-name" type="text" class="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-xs text-white focus:outline-none focus:border-white/30" placeholder="歌曲名称（例如：古神低语 BGM）" />
-            <input id="dm-link-url" type="text" class="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-xs text-white focus:outline-none focus:border-white/30" placeholder="粘贴音频直链或 B站 BV号 / 视频链接" />
+            <input id="dm-link-name" type="text" class="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-xs text-white focus:outline-none focus:border-white/30" placeholder="歌曲名称" />
+            <input id="dm-link-url" type="text" class="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-xs text-white focus:outline-none focus:border-white/30" placeholder="粘贴在线音频直链 (.mp3 / .wav / .ogg)" />
             <div class="grid grid-cols-2 gap-3">
               <input id="dm-link-emoji" type="text" value="BGM" class="bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-xs font-mono-code text-white focus:outline-none" placeholder="代号（如 BGM / SFX）" />
               <input id="dm-link-tags" type="text" value="" class="bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-xs text-white focus:outline-none" placeholder="Tag（逗号分隔）" />
@@ -701,7 +739,7 @@
         </div>
 
         <div>
-          <label class="block text-zinc-400 mb-2">简写代号（用于快速标识与检索）</label>
+          <label class="block text-zinc-400 mb-2">简写代号</label>
           <div class="flex items-center gap-2.5 flex-wrap">
             <input id="edit-track-emoji" type="text" class="w-20 text-center font-mono-code bg-black/50 border border-white/15 rounded-xl px-2 py-2.5 text-white focus:outline-none" />
             <div class="flex flex-wrap gap-1.5 font-mono-code text-xs">
@@ -748,7 +786,19 @@
       <div class="space-y-5 text-xs">
         <div>
           <label class="block text-zinc-400 mb-2">房间标题</label>
-          <input id="theme-room-title" type="text" value="跑团跨网同步混音台" oninput="previewThemeChanges()" class="w-full bg-black/50 border border-white/15 rounded-xl px-4 py-3 text-white focus:outline-none" />
+          <input id="theme-room-title" type="text" value="同步混音台" oninput="previewThemeChanges()" class="w-full bg-black/50 border border-white/15 rounded-xl px-4 py-3 text-white focus:outline-none" />
+        </div>
+
+        <div>
+          <label class="block text-zinc-400 mb-2">界面亮暗模式（与房间玩家同步）</label>
+          <div class="grid grid-cols-2 gap-3">
+            <button id="btn-mode-dark" type="button" onclick="selectColorMode('dark')" class="py-2.5 px-4 rounded-xl text-xs font-medium btn-accent">
+              深色模式 (Dark)
+            </button>
+            <button id="btn-mode-light" type="button" onclick="selectColorMode('light')" class="py-2.5 px-4 rounded-xl text-xs font-medium bg-white/5 hover:bg-white/10 text-zinc-300 border border-white/10">
+              亮色模式 (Light)
+            </button>
+          </div>
         </div>
 
         <div>
@@ -812,23 +862,16 @@
   </div>
 
   <!-- ========================================== -->
-  <!-- MODAL 4: BILIBILI PYTHON HELPER & BACKUP   -->
+  <!-- MODAL 4: REPOSITORY BACKUP & CACHE         -->
   <!-- ========================================== -->
   <div id="helper-modal" class="fixed inset-0 z-50 hidden bg-black/80 backdrop-blur-md flex items-center justify-center p-6">
     <div class="glass-panel max-w-lg w-full p-8 space-y-6 border border-white/15">
       <div class="flex items-center justify-between border-b border-white/10 pb-4">
-        <h3 class="text-base font-medium text-white">B站音频解析小助手与曲库备份</h3>
+        <h3 class="text-base font-medium text-white">曲库数据备份与恢复</h3>
         <button onclick="closeModal('helper-modal')" class="text-zinc-400 hover:text-white text-xs font-mono-code">CLOSE</button>
       </div>
 
       <div class="space-y-5 text-xs text-zinc-300 leading-relaxed">
-        <div class="glass-card p-5 space-y-2">
-          <div class="font-medium text-white">Bilibili 视频转可混音音轨</div>
-          <p class="text-zinc-400">
-            运行配套的 <code class="text-accent font-mono-code">trpg_audio_helper.py</code>，粘贴 B 站链接或 BV 号即可提取高音质音频到本地文件夹，拖入本网页即可支持独立音量滑块、进度拖动、淡入淡出与跨网同步。
-          </p>
-        </div>
-
         <div class="glass-card p-5 space-y-3">
           <div class="font-medium text-white">曲库数据备份与恢复</div>
           <p class="text-zinc-400">将文件夹分类、歌单名称、Tag 标签与场景预设导出为 JSON 文件保存。</p>
@@ -924,7 +967,8 @@
     // 1. CLEAN INITIAL STATE (ZERO PRESET TRACKS, ZERO PRESET SCENES)
     // =====================================================
     const DEFAULT_THEME = {
-      roomTitle: '跑团跨网同步混音台',
+      roomTitle: '同步混音台',
+      colorMode: 'dark',
       accent: '#e14141',
       bgImage: '',
       bgDim: 92,
@@ -959,6 +1003,17 @@
       if (bgBlur) bgBlur.value = t.bgBlur ?? 16;
       const blurVal = document.getElementById('bg-blur-val');
       if (blurVal) blurVal.textContent = (t.bgBlur ?? 16) + 'px';
+      const isLight = t.colorMode === 'light';
+      const btnDark = document.getElementById('btn-mode-dark');
+      const btnLight = document.getElementById('btn-mode-light');
+      if (btnDark && btnLight) {
+        btnDark.className = !isLight
+          ? 'py-2.5 px-4 rounded-xl text-xs font-medium btn-accent'
+          : 'py-2.5 px-4 rounded-xl text-xs font-medium bg-white/5 hover:bg-white/10 text-zinc-300 border border-white/10';
+        btnLight.className = isLight
+          ? 'py-2.5 px-4 rounded-xl text-xs font-medium btn-accent'
+          : 'py-2.5 px-4 rounded-xl text-xs font-medium bg-white/5 hover:bg-white/10 text-zinc-300 border border-white/10';
+      }
     }
 
     const state = {
@@ -969,6 +1024,9 @@
       playerName: '',
       playerReqDrawerOpen: false,
       fadeEnabled: true,
+      voiceGuardEnabled: true,
+      tabAudioSharing: false,
+      tabCaptureVolume: 80,
       playerMasterVolume: 1.0,
       playerMuted: false,
       currentFolder: '全部曲目',
@@ -978,7 +1036,8 @@
       tutorialSeenPlayer: false,
       themesByRoom: {},
       theme: {
-        roomTitle: '跑团跨网同步混音台',
+        roomTitle: '同步混音台',
+        colorMode: 'dark',
         accent: '#e14141',
         bgImage: '',
         bgDim: 92,
@@ -992,7 +1051,6 @@
       ],
       tracks: (window.TRPG_CLOUD_TRACKS && Array.isArray(window.TRPG_CLOUD_TRACKS)) ? window.TRPG_CLOUD_TRACKS : [],
       scenes: [],
-      pendingJoinRequests: [],
       approvedPlayersByRoom: {},
       approvedPlayers: [],
       playerTelemetry: {},
@@ -1009,52 +1067,52 @@
         {
           targetId: 'lobby-room-code-input',
           title: '1. 设置或输入房间频道码',
-          desc: '在这里输入你们这桌专属的房间码（如 fishtable）。不同房间码之间完全独立，A 桌和 B 桌同时跑团互不干扰。',
-          tip: '提示：点右侧「复制房间码」即可一键发给同桌玩家。'
+          desc: '在这里设置或输入本桌房间码即可创建房间。',
+          tip: '点右侧「复制房间码」可复制发送给玩家'
         },
         {
           targetId: 'lobby-card-dm',
-          title: '2. 主持人（DM）唯一入口',
-          desc: '如果你是带团主持人，点击这里创建并开启房间。当房间里已有主持人在线时，此按钮会自动锁死，防止其他人误点。',
-          tip: '提示：必须由主持人先开启房间，玩家才能连入。'
+          title: '2. 主持人端',
+          desc: '如果您是主持人，点击这里创建并开启房间。当房间里已经有主持人时无法选择。',
+          tip: '提示：必须由主持人先创建房间，玩家才能连接。'
         },
         {
           targetId: 'btn-enter-as-player',
-          title: '3. 玩家同码直连入口',
-          desc: '如果你是玩家，在上方填好你的名字，确认房间码与主持人一致后点击此按钮即可直接进房，网页会自动记住你的名字与房间码。',
-          tip: '提示：若主持人尚未开房，页面会提示「房间不存在」。'
+          title: '3. 玩家端',
+          desc: '如果您是玩家，在此处填写玩家名称或角色名称，主持人端会显示您的状态',
+          tip: '提示：若主持人尚未创建房间，页面会提示「房间不存在」。'
         }
       ],
       host: [
         {
           targetId: 'btn-open-import',
-          title: '1. 导入本地音频与在线链接',
-          desc: '点击这里的「+ 导入音频或链接」，可多选上传电脑里的 MP3 / WAV 等音频文件（永久保存在你的浏览器本地仓库，刷新不丢失），或添加在线链接。',
-          tip: '提示：玩家进房后，系统会自动按优先级将你播放的曲目同步给玩家。'
+          title: '1. 导入本地音频',
+          desc: '点击这里的「+ 导入音频或链接」，可多选上传电脑里的 MP3 / WAV 等音频文件（永久保存在你的浏览器本地仓库，刷新不丢失）',
+          tip: '提示：玩家进房后，会自动播放混音台歌曲'
         },
         {
           targetId: 'repo-search-input',
-          title: '2. 右侧歌曲仓库与快速检索',
-          desc: '你导入的所有音频都会列在右侧仓库中。可以通过上方的文件夹分类切换，或在此搜索框按歌曲名、Tag 标签、代号快速找到需要的配乐。',
+          title: '2. 歌曲仓库与快速检索',
+          desc: '您导入的所有音频都会列在右侧仓库中。可以通过上方的文件夹分类切换，或在此搜索框按歌曲名、Tag 标签、代号快速找到需要的配乐。',
           tip: '提示：点击任意曲目上的「播放」按钮，即可将其送入左侧混音台。'
         },
         {
           targetId: 'active-mixer-channels',
-          title: '3. 左侧多轨混音台与进度拖动',
-          desc: '正在播放的所有音轨都会集中在左侧。你可以同时叠放多首环境音与 BGM，独立调节每条音轨的音量，或直接拖动进度条（PROGRESS）跳转时间。',
-          tip: '提示：勾选上方「1.5秒平滑淡入淡出」可让切歌过渡更自然。'
+          title: '3. 多轨混音台与进度拖动',
+          desc: '正在播放的所有音轨都会集中在左侧。您可以同时叠放多首音频，独立调节每条音轨的音量，或拖动进度条跳转时间。',
+          tip: '提示：勾选上方「平滑淡入淡出」可让切歌过渡更自然。'
         },
         {
           targetId: 'scene-presets-bar',
           title: '4. 场景组合预设（Scenes）开关',
-          desc: '当你同时调好几条音轨的音量（比如雨声 + 战斗曲）后，点上方「保存为场景预设」就会生成场景按钮。点击场景即可一键开启（ON）或关闭（OFF）整套组合。',
+          desc: '当您同时调好几条音轨的音量（比如雨声 + 战斗曲）后，点上方「保存为场景预设」就会生成场景按钮。点击场景即可一键开启或关闭整套组合。',
           tip: '提示：系统会自动优先把场景关联的歌曲预热同步给玩家。'
         },
         {
           targetId: 'btn-open-theme',
           title: '5. 房间外观定制与全员同步',
           desc: '点击「房间外观」可以自定义本房间的高亮强调色或上传背景图。外观仅对当前房间生效，房间内的所有玩家会自动同步显示。',
-          tip: '提示：退回主界面或去其他房间会自动恢复，不会串房间。'
+          tip: '提示：退回主界面或去其他房间会自动恢复。'
         }
       ],
       player: [
@@ -1062,19 +1120,19 @@
           targetId: 'btn-unlock-audio',
           title: '1. 点击校准并激活声音',
           desc: '刚进入房间或刷新网页后，请先点击一次这里的「校准并激活音频」，用于解锁浏览器的自动播放限制，确保能立刻听到主持人的音乐。',
-          tip: '提示：系统会优先同步并播放主持人当前正在播放的曲目。'
+          tip: '提示：系统会同步并播放主持人当前正在播放的曲目。'
         },
         {
           targetId: 'player-master-slider',
-          title: '2. 调节你自己的耳机总音量',
-          desc: '左右拖动这根滑块（或点击左侧「静音」）可以随时调节你自己听到的整体音量大小，完全不会影响主持人和其他玩家。',
-          tip: '提示：下方「清理本地音频缓存」可在跑完团后一键释放浏览器空间。'
+          title: '2. 调节音量',
+          desc: '左右拖动滑块（或点击左侧「静音」）可以调节听到的整体音量大小。',
+          tip: '提示：下方「清理本地音频缓存」可释放浏览器空间。'
         },
         {
           targetId: 'player-drawer-arrow',
-          title: '3. 展开面板向主持人投递歌曲',
-          desc: '想向主持人推荐或申请播放角色曲时，点击这里即可展开折叠面板，上传本地音频文件或粘贴链接发送给主持人审批。',
-          tip: '提示：主持人点击通过或拒绝后，展开面板底部会实时显示回执结果。'
+          title: '3. 向主持人投递歌曲',
+          desc: '想向主持人推荐或申请播放音频时，点击这里展开面板，上传本地音频文件发送给主持人审批。',
+          tip: '提示：主持人点击通过或拒绝后，面板底部会实时显示回执结果。'
         }
       ]
     };
@@ -1202,8 +1260,8 @@
         'STEP 0' + (currentTutIndex + 1) + ' / 0' + steps.length;
       document.getElementById('tutorial-role-label').textContent =
         currentTutRole === 'lobby'
-          ? 'LOBBY GUIDE · 入口引导'
-          : (currentTutRole === 'host' ? 'HOST GUIDE · 主持人端引导' : 'PLAYER GUIDE · 玩家端引导');
+          ? '/大厅引导'
+          : (currentTutRole === 'host' ? '/主持人端引导' : '/玩家端引导');
       document.getElementById('tutorial-step-title').textContent = step.title;
       document.getElementById('tutorial-step-desc').textContent = step.desc;
       document.getElementById('tutorial-step-tip').textContent = step.tip;
@@ -1275,6 +1333,9 @@
         if (!audioCtx) return fileBlob;
         const arrayBuf = await fileBlob.arrayBuffer();
         const audioBuffer = await audioCtx.decodeAudioData(arrayBuf.slice(0));
+        if (!audioBuffer.duration || audioBuffer.duration <= 0 || audioBuffer.duration > 900) {
+          return fileBlob; // Guard against 0s or >15min audio buffers to prevent RAM spikes
+        }
         const targetSampleRate = 22050;
         const targetLength = Math.max(1, Math.ceil(audioBuffer.duration * targetSampleRate));
         const OfflineCtx = window.OfflineAudioContext || window.webkitOfflineAudioContext;
@@ -1343,6 +1404,147 @@
       }
     }
 
+    let tabCaptureStream = null;
+    let tabCaptureSourceNode = null;
+    let tabCaptureGainNode = null;
+    let broadcastThrottleTimer = null;
+
+    function scheduleThrottledBroadcast() {
+      if (broadcastThrottleTimer) return;
+      broadcastThrottleTimer = setTimeout(() => {
+        broadcastThrottleTimer = null;
+        broadcastRoomState();
+      }, 110);
+    }
+
+    function callAllPlayersWithLiveStream() {
+      if (!peerInstance || !streamDestNode || !streamDestNode.stream) return;
+      peerConnections.forEach(conn => {
+        if (conn && conn.open && conn.peer) {
+          try {
+            peerInstance.call(conn.peer, streamDestNode.stream);
+          } catch (e) {}
+        }
+      });
+    }
+
+    window.toggleTabAudioCapture = async function() {
+      if (state.tabAudioSharing) {
+        stopTabAudioCapture();
+        return;
+      }
+      if (!navigator.mediaDevices || typeof navigator.mediaDevices.getDisplayMedia !== 'function') {
+        showToast('当前浏览器环境不支持捕获标签页音频，请使用电脑端 Chrome 或 Edge 浏览器', 'warn');
+        return;
+      }
+      try {
+        ensureAudioContext();
+        const stream = await navigator.mediaDevices.getDisplayMedia({
+          video: true,
+          audio: {
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: false
+          }
+        });
+        const audioTracks = stream.getAudioTracks();
+        // Immediately stop video tracks so zero video bandwidth is used
+        stream.getVideoTracks().forEach(vt => {
+          try { vt.stop(); } catch (e) {}
+        });
+
+        if (!audioTracks || audioTracks.length === 0) {
+          showToast('未检测到标签页声音！请在弹窗中选择标签页并勾选底部「同时分享标签页音频」', 'warn');
+          return;
+        }
+
+        const audioOnlyStream = new MediaStream([audioTracks[0]]);
+        tabCaptureStream = audioOnlyStream;
+        tabCaptureSourceNode = audioCtx.createMediaStreamSource(audioOnlyStream);
+        tabCaptureGainNode = audioCtx.createGain();
+        tabCaptureGainNode.gain.value = (state.tabCaptureVolume || 80) / 100;
+
+        if (streamDestNode) {
+          tabCaptureSourceNode.connect(tabCaptureGainNode);
+          tabCaptureGainNode.connect(streamDestNode);
+        }
+
+        audioTracks[0].onended = () => {
+          stopTabAudioCapture();
+        };
+
+        state.tabAudioSharing = true;
+        updateTabCaptureUI();
+        callAllPlayersWithLiveStream();
+        broadcastRoomState();
+        showToast('已开启标签页音频广播', 'success');
+      } catch (err) {
+        if (err && err.name !== 'NotAllowedError') {
+          showToast('无法开启标签页音频广播：' + (err.message || '浏览器限制'), 'warn');
+        }
+      }
+    };
+
+    function stopTabAudioCapture() {
+      if (tabCaptureStream) {
+        tabCaptureStream.getTracks().forEach(t => {
+          try { t.stop(); } catch (e) {}
+        });
+        tabCaptureStream = null;
+      }
+      if (tabCaptureSourceNode) {
+        try { tabCaptureSourceNode.disconnect(); } catch (e) {}
+        tabCaptureSourceNode = null;
+      }
+      if (tabCaptureGainNode) {
+        try { tabCaptureGainNode.disconnect(); } catch (e) {}
+        tabCaptureGainNode = null;
+      }
+      if (state.tabAudioSharing) {
+        state.tabAudioSharing = false;
+        updateTabCaptureUI();
+        broadcastRoomState();
+        showToast('已停止标签页音频广播', 'info');
+      }
+    }
+
+    function updateTabCaptureUI() {
+      const btn = document.getElementById('btn-tab-audio-share');
+      const statusTxt = document.getElementById('tab-capture-status-text');
+      const volRow = document.getElementById('tab-capture-volume-row');
+      if (btn) {
+        btn.textContent = state.tabAudioSharing ? '停止共享标签页音频' : '共享标签页音频';
+        btn.className = state.tabAudioSharing
+          ? 'px-3.5 py-2 rounded-xl text-xs font-medium btn-accent shrink-0'
+          : 'px-3.5 py-2 rounded-xl text-xs font-medium bg-white/10 hover:bg-white/15 text-white transition shrink-0';
+      }
+      if (statusTxt) {
+        statusTxt.textContent = state.tabAudioSharing
+          ? '正在广播标签页音频'
+          : '捕获浏览器其他标签页正在播放的声音并实时同步给玩家';
+        statusTxt.className = state.tabAudioSharing ? 'text-[11px] text-emerald-400' : 'text-[11px] text-zinc-500';
+      }
+      if (volRow) {
+        volRow.classList.toggle('hidden', !state.tabAudioSharing);
+      }
+    }
+
+    window.onTabCaptureVolumeInput = function(val) {
+      const v = Math.max(0, Math.min(100, parseInt(val, 10) || 0));
+      state.tabCaptureVolume = v;
+      const lbl = document.getElementById('tab-capture-vol-label');
+      if (lbl) lbl.textContent = v + '%';
+      if (tabCaptureGainNode && audioCtx) {
+        tabCaptureGainNode.gain.setTargetAtTime(v / 100, audioCtx.currentTime, 0.05);
+      }
+    };
+
+    window.toggleVoiceGuard = function(checked) {
+      state.voiceGuardEnabled = Boolean(checked);
+      showToast(checked ? '已开启限速（后台传歌限速在140KB/s内，保障语音流畅）' : '已取消限速', 'info');
+      saveStateToLocalStorage();
+    };
+
     function getEffectiveMasterVolume() {
       if (state.role === 'player') {
         return state.playerMuted ? 0 : state.playerMasterVolume;
@@ -1360,7 +1562,8 @@
       }
       const remoteAudio = document.getElementById('remote-webrtc-audio');
       if (remoteAudio) {
-        remoteAudio.volume = Math.min(1, Math.max(0, getEffectiveMasterVolume()));
+        const shouldPlayLiveStream = Boolean(state.tabAudioSharing) || state.tracks.some(t => t.playing && !t.audioUrl);
+        remoteAudio.volume = shouldPlayLiveStream ? Math.min(1, Math.max(0, getEffectiveMasterVolume())) : 0;
         remoteAudio.muted = state.playerMuted;
       }
       Object.keys(activeNodes).forEach(tid => {
@@ -1440,7 +1643,7 @@
         } catch (e) {}
       }
       updateTrackProgressDOM(track);
-      broadcastRoomState();
+      scheduleThrottledBroadcast();
     };
 
     function mountAndPlayAudioElement(track) {
@@ -1448,7 +1651,9 @@
 
       const audioEl = new Audio();
       audioEl.preload = 'auto';
-      audioEl.src = track.audioUrl;
+      const safeSrc = sanitizeAudioUrl(track.audioUrl);
+      if (!safeSrc) return;
+      audioEl.src = safeSrc;
       audioEl.loop = track.loop !== false;
 
       const finalVol = computeTargetElementVolume(track);
@@ -1525,7 +1730,7 @@
               state.localPlayerAudioUnlocked = false;
               const stEl = document.getElementById('player-stream-status');
               if (stEl) {
-                stEl.textContent = '请点击右侧「校准并激活音频」以解锁声音';
+                stEl.textContent = '请点击右侧「校准并激活音频」以解锁音频';
                 stEl.className = 'text-rose-400 font-medium';
               }
               reportPlayerStatusToHost('autoplay_blocked');
@@ -1550,6 +1755,20 @@
 
     function startTrackAudio(track) {
       ensureAudioContext();
+      const existingEntry = activeNodes[track.id];
+      if (existingEntry && existingEntry.audioEl && existingEntry.audioEl.src) {
+        if (existingEntry.fadeTimer) {
+          clearInterval(existingEntry.fadeTimer);
+          existingEntry.fadeTimer = null;
+        }
+        const targetVol = computeTargetElementVolume(track);
+        if (typeof track.currentTime === 'number' && Math.abs((existingEntry.audioEl.currentTime || 0) - track.currentTime) > 2) {
+          try { existingEntry.audioEl.currentTime = track.currentTime; } catch (e) {}
+        }
+        existingEntry.audioEl.volume = targetVol;
+        existingEntry.audioEl.play().catch(() => {});
+        return;
+      }
       stopTrackAudioImmediate(track.id);
 
       if (typeof track.duration !== 'number' || track.duration <= 0) {
@@ -1604,48 +1823,63 @@
       delete activeNodes[trackId];
     }
 
-    function stopTrackWithOptionalFade(track) {
+    function pauseTrackWithOptionalFade(track) {
       const entry = activeNodes[track.id];
-      if (!entry || !entry.audioEl) {
-        stopTrackAudioImmediate(track.id);
-        return;
-      }
+      if (!entry || !entry.audioEl) return;
       if (entry.fadeTimer) {
         clearInterval(entry.fadeTimer);
         entry.fadeTimer = null;
       }
       if (state.fadeEnabled && entry.audioEl.volume > 0.02) {
         const startVol = entry.audioEl.volume;
-        const steps = 20;
-        const stepMs = 55; // ~1.1s smooth fade-out
+        const steps = 16;
+        const stepMs = 50; // ~0.8s smooth fade to pause
         let curStep = 0;
         entry.fadeTimer = setInterval(() => {
           curStep++;
           if (curStep >= steps || track.playing) {
             clearInterval(entry.fadeTimer);
             entry.fadeTimer = null;
-            if (!track.playing) {
-              stopTrackAudioImmediate(track.id);
+            if (!track.playing && entry.audioEl) {
+              try {
+                track.currentTime = Math.floor(entry.audioEl.currentTime || track.currentTime || 0);
+                entry.audioEl.pause();
+              } catch (e) {}
             }
-          } else {
+          } else if (entry.audioEl) {
             entry.audioEl.volume = Math.max(0, startVol * (1 - curStep / steps));
           }
         }, stepMs);
       } else {
-        stopTrackAudioImmediate(track.id);
+        try {
+          track.currentTime = Math.floor(entry.audioEl.currentTime || track.currentTime || 0);
+          entry.audioEl.pause();
+        } catch (e) {}
       }
     }
 
+    function stopTrackWithOptionalFade(track) {
+      if (track && track.inMixer) {
+        pauseTrackWithOptionalFade(track);
+        return;
+      }
+      const entry = activeNodes[track ? track.id : ''];
+      if (!entry || !entry.audioEl) {
+        if (track) stopTrackAudioImmediate(track.id);
+        return;
+      }
+      stopTrackAudioImmediate(track.id);
+    }
+
     function syncSceneStatesWithTracks() {
+      const playingIdSet = new Set();
+      state.tracks.forEach(t => { if (t.playing) playingIdSet.add(t.id); });
       state.scenes.forEach(sc => {
         if (!Array.isArray(sc.items) || sc.items.length === 0) {
           sc.active = false;
           return;
         }
-        sc.active = sc.items.every(item => {
-          const tr = state.tracks.find(t => t.id === item.id);
-          return Boolean(tr && tr.playing);
-        });
+        sc.active = sc.items.every(item => playingIdSet.has(item.id));
       });
     }
 
@@ -1728,6 +1962,7 @@
         }
       }
 
+      renderPlayerView();
       sendPacketToRoom({
         type: 'PLAYER_STATUS_REPORT',
         roomCode: state.roomCode,
@@ -1763,7 +1998,7 @@
         stEl.className = 'text-emerald-400';
       }
       reportPlayerStatusToHost();
-      showToast('已校准并同步主持人当前播放曲目与进度（误差10秒内保持平滑播放）', 'success');
+      showToast('已校准并同步主持人当前播放曲目与进度', 'success');
     };
 
     // =====================================================
@@ -1780,7 +2015,6 @@
       state.roomCode = cleaned;
       state.dmHolderId = '';
       state.approvedPlayers = (state.approvedPlayersByRoom && state.approvedPlayersByRoom[cleaned]) ? [...state.approvedPlayersByRoom[cleaned]] : [];
-      state.pendingJoinRequests = [];
       state.pendingRequests = [];
       document.getElementById('room-code-input').value = cleaned;
       document.getElementById('header-room-code-text').textContent = cleaned;
@@ -1836,7 +2070,7 @@
       const nameInput = document.getElementById('lobby-player-name-input');
       const playerName = (nameInput.value || '').trim();
       if (!playerName) {
-        showToast('请先输入你的玩家名称', 'warn');
+        showToast('请先输入你的名称', 'warn');
         nameInput.focus();
         return;
       }
@@ -1883,35 +2117,11 @@
       });
     };
 
-    window.handleDmApproveJoin = function(joinId, approved) {
-      const idx = state.pendingJoinRequests.findIndex(j => j.joinId === joinId);
-      if (idx === -1) return;
-      const joinReq = state.pendingJoinRequests[idx];
-      state.pendingJoinRequests.splice(idx, 1);
 
-      if (approved) {
-        if (!state.approvedPlayers.includes(joinReq.playerName)) {
-          state.approvedPlayers.push(joinReq.playerName);
-        }
-        if (!state.approvedPlayersByRoom) state.approvedPlayersByRoom = {};
-        state.approvedPlayersByRoom[state.roomCode] = [...state.approvedPlayers];
-        showToast('已准许玩家 [' + joinReq.playerName + '] 进入房间', 'success');
-      } else {
-        showToast('已拒绝玩家 [' + joinReq.playerName + '] 的入房申请', 'warn');
-      }
-
-      sendPacketToRoom({
-        type: 'DM_JOIN_DECISION',
-        roomCode: state.roomCode,
-        playerName: joinReq.playerName,
-        approved: approved,
-        approvedPlayers: state.approvedPlayers
-      });
-      broadcastRoomState();
-      renderAll();
-    };
 
     window.leaveRoomToLobby = function() {
+      stopTabAudioCapture();
+      Object.keys(activeNodes).forEach(tid => stopTrackAudioImmediate(tid));
       if (state.role === 'dm' && state.dmHolderId === CLIENT_SESSION_ID) {
         state.dmHolderId = '';
         sendPacketToRoom({
@@ -2089,12 +2299,15 @@
             }
             handleIncomingSyncPacket(data);
           });
-          conn.on('close', () => {
+          const cleanupConn = () => {
+            peerConnections = peerConnections.filter(c => c !== conn && c.open);
             if (conn._playerName && state.playerTelemetry[conn._playerName]) {
               state.playerTelemetry[conn._playerName].connected = false;
               renderViewStageVisibility();
             }
-          });
+          };
+          conn.on('close', cleanupConn);
+          conn.on('error', cleanupConn);
           conn.on('open', () => {
             broadcastRoomState();
             pushAllLocalAudioFilesToConn(conn);
@@ -2118,7 +2331,7 @@
               errBanner.textContent = '房间「' + state.roomCode + '」已有主持人在线，无法再以主持人身份进入。';
               errBanner.classList.remove('hidden');
             }
-            showToast('该房间已有主持人在线，已锁定主持人入口', 'warn');
+            showToast('该房间已有主持人在线', 'warn');
           }
         });
       } catch (e) {}
@@ -2221,14 +2434,14 @@
             const remoteAudio = document.getElementById('remote-webrtc-audio');
             if (remoteAudio) {
               remoteAudio.srcObject = remoteStream;
-              const hasLocalSyncedPlaying = state.tracks.some(t => t.playing && t.audioUrl);
-              remoteAudio.volume = hasLocalSyncedPlaying ? 0 : Math.min(1, Math.max(0, getEffectiveMasterVolume()));
+              const shouldPlayLiveStream = Boolean(state.tabAudioSharing) || state.tracks.some(t => t.playing && !t.audioUrl);
+              remoteAudio.volume = shouldPlayLiveStream ? Math.min(1, Math.max(0, getEffectiveMasterVolume())) : 0;
               remoteAudio.play().catch(() => {});
             }
             refreshCacheSizeDisplay();
             const stEl = document.getElementById('player-stream-status');
             if (stEl) {
-              stEl.textContent = '已连接主持人实时混音流';
+              stEl.textContent = '已连接主持人混音台';
               stEl.className = 'text-emerald-400';
             }
           });
@@ -2236,19 +2449,44 @@
       } catch (e) {}
     }
 
-    const incomingAudioChunks = {}; // trackId -> { total, chunks: [], mime, name }
+    const incomingAudioChunks = {};
+    const memoryBlobCache = new Map(); // trackId -> Blob (eliminates N+1 IndexedDB queries)
+
+    function revokeTrackObjectUrl(track) {
+      if (track && track.audioUrl && track.audioUrl.startsWith('blob:')) {
+        try { URL.revokeObjectURL(track.audioUrl); } catch (e) {}
+        track.audioUrl = '';
+      }
+    }
 
     async function getTrackBlobFromDB(trackId) {
+      if (memoryBlobCache.has(trackId)) {
+        return memoryBlobCache.get(trackId);
+      }
       const db = await openAudioDB();
       if (!db) return null;
       return new Promise((resolve) => {
         try {
           const tx = db.transaction(DB_STORE, 'readonly');
           const req = tx.objectStore(DB_STORE).get(trackId);
-          req.onsuccess = () => resolve(req.result ? req.result.blob : null);
+          req.onsuccess = () => {
+            const blob = req.result ? req.result.blob : null;
+            if (blob) memoryBlobCache.set(trackId, blob);
+            resolve(blob);
+          };
           req.onerror = () => resolve(null);
         } catch (e) { resolve(null); }
       });
+    }
+
+    async function deleteBlobFromIndexedDB(trackId) {
+      memoryBlobCache.delete(trackId);
+      const db = await openAudioDB();
+      if (!db) return;
+      try {
+        const tx = db.transaction(DB_STORE, 'readwrite');
+        tx.objectStore(DB_STORE).delete(trackId);
+      } catch (e) {}
     }
 
     async function getCachedTrackIdsFromDB() {
@@ -2301,13 +2539,18 @@
             conn._preemptRequested = false;
             return false;
           }
-          // Keep buffer <= 64KB so ROOM_SYNC / song-switch packets arrive in <15ms without head-of-line blocking
+          // Voice Guard Bandwidth Limiter: keep WebRTC buffer <= 32KB and pace chunks at ~140KB/s when enabled
+          const maxBuf = state.voiceGuardEnabled ? 32 * 1024 : 64 * 1024;
           if (dc && typeof dc.bufferedAmount === 'number') {
             let guard = 0;
-            while (conn.open && dc.bufferedAmount > 64 * 1024 && guard < 60) {
-              await new Promise(r => setTimeout(r, 10));
+            while (conn.open && dc.bufferedAmount > maxBuf && guard < 80) {
+              await new Promise(r => setTimeout(r, 12));
               guard++;
             }
+          }
+          if (state.voiceGuardEnabled) {
+            // 32KB every ~220ms = ~145KB/s steady pacing so voice chat never stutters
+            await new Promise(r => setTimeout(r, 210));
           } else if (i % 3 === 2) {
             await new Promise(r => setTimeout(r, 6));
           }
@@ -2383,6 +2626,7 @@
         type: 'ROOM_SYNC',
         roomCode: state.roomCode,
         dmHolderId: state.dmHolderId,
+        tabAudioSharing: state.tabAudioSharing,
         theme: state.theme,
         tracks: state.tracks.map(t => ({
           id: t.id,
@@ -2399,7 +2643,6 @@
           currentTime: t.currentTime || 0,
           duration: t.duration || 180
         })),
-        pendingJoinRequests: state.pendingJoinRequests,
         approvedPlayers: state.approvedPlayers,
         pendingRequests: state.pendingRequests,
         playerHistory: state.playerHistory
@@ -2469,12 +2712,15 @@
             const fullBlob = new Blob(entry.chunks, { type: entry.mime });
             saveBlobToIndexedDB(tid, fullBlob);
             if (tr) {
+              const prevPartialUrl = tr.audioUrl;
               const fullUrl = URL.createObjectURL(fullBlob);
               const activeNode = activeNodes[tr.id];
-              // If already playing the early partial stream, smoothly swap to full blob at exact currentTime
               if (tr.playing && activeNode && activeNode.audioEl && tr._isPartial) {
                 const curPos = activeNode.audioEl.currentTime || tr.currentTime || 0;
                 tr.audioUrl = fullUrl;
+                if (prevPartialUrl && prevPartialUrl.startsWith('blob:')) {
+                  setTimeout(() => { try { URL.revokeObjectURL(prevPartialUrl); } catch (e) {} }, 500);
+                }
                 tr._isPartial = false;
                 tr.currentTime = curPos;
                 startTrackAudio(tr);
@@ -2491,7 +2737,7 @@
             }
             const stEl = document.getElementById('player-stream-status');
             if (stEl && state.localPlayerAudioUnlocked) {
-              stEl.textContent = '声音已激活 · 实时同步中';
+              stEl.textContent = '音频已激活 · 实时同步中';
               stEl.className = 'text-emerald-400';
             }
             reportPlayerStatusToHost();
@@ -2567,57 +2813,7 @@
         return;
       }
 
-      if (data.type === 'PLAYER_JOIN_REQ' && data.joinReq) {
-        const pName = data.joinReq.playerName;
-        // If this player name was already approved previously by the DM, auto-approve immediately
-        if (state.approvedPlayers.includes(pName)) {
-          if (state.role === 'dm') {
-            sendPacketToRoom({
-              type: 'DM_JOIN_DECISION',
-              roomCode: state.roomCode,
-              playerName: pName,
-              approved: true,
-              approvedPlayers: state.approvedPlayers
-            });
-            broadcastRoomState();
-          }
-          return;
-        }
-        const exists = state.pendingJoinRequests.some(j => j.playerName === pName);
-        if (!exists) {
-          state.pendingJoinRequests.push(data.joinReq);
-          if (state.role === 'dm') {
-            showToast('收到玩家 [' + pName + '] 的进入房间申请', 'info');
-          }
-          renderAll();
-        }
-        return;
-      }
 
-      if (data.type === 'DM_JOIN_DECISION') {
-        hostFoundViaAnyChannel = true;
-        if (Array.isArray(data.approvedPlayers)) {
-          state.approvedPlayers = data.approvedPlayers;
-        }
-        if (state.viewStage === 'player_waiting' && state.playerName === data.playerName) {
-          if (data.approved) {
-            state.viewStage = 'in_room';
-            renderAll();
-            showToast('主持人已通过你的申请，欢迎 [' + state.playerName + '] 进入房间', 'success');
-            if (!state.tutorialSeenPlayer) {
-              openTutorialModal('player');
-            }
-          } else {
-            const msgEl = document.getElementById('waiting-status-message');
-            if (msgEl) {
-              msgEl.textContent = '主持人拒绝了本次入房申请。';
-              msgEl.className = 'text-xs text-rose-400 leading-relaxed pt-1';
-            }
-            showToast('主持人拒绝了你的入房申请', 'warn');
-          }
-        }
-        return;
-      }
 
       if (data.type === 'PLAYER_SONG_REQ' && data.reqObj) {
         const exists = state.pendingRequests.some(r => r.reqId === data.reqObj.reqId);
@@ -2662,6 +2858,10 @@
         if (typeof data.dmHolderId === 'string') {
           state.dmHolderId = data.dmHolderId;
         }
+        if (typeof data.tabAudioSharing === 'boolean') {
+          state.tabAudioSharing = data.tabAudioSharing;
+          updateMasterGainValue();
+        }
         if (state.viewStage === 'in_room' && state.role === 'player' && data.theme) {
           state.theme = Object.assign(getDefaultTheme(), data.theme);
           applyThemeToDOM();
@@ -2676,29 +2876,27 @@
             if (t.audioUrl) oldUrlMap[t.id] = t.audioUrl;
             if (t._isPartial) oldPartialMap[t.id] = true;
           });
+          const incomingIds = new Set(data.tracks.map(t => t.id));
+          // Revoke ObjectURLs for any tracks removed by Host
+          state.tracks.forEach(oldTrack => {
+            if (!incomingIds.has(oldTrack.id)) {
+              revokeTrackObjectUrl(oldTrack);
+            }
+          });
           state.tracks = data.tracks.map(incoming => {
             const copy = Object.assign({}, incoming);
             if (!copy.audioUrl && oldUrlMap[copy.id]) {
               copy.audioUrl = oldUrlMap[copy.id];
               copy._isPartial = Boolean(oldPartialMap[copy.id]);
+            } else if (!copy.audioUrl && memoryBlobCache.has(copy.id)) {
+              copy.audioUrl = URL.createObjectURL(memoryBlobCache.get(copy.id));
+              copy._isPartial = false;
             }
             return copy;
           });
-          // Restore any blobs from IndexedDB that match the Host's tracks
-          restoreBlobsFromIndexedDB();
-        }
-        if (Array.isArray(data.pendingJoinRequests)) {
-          state.pendingJoinRequests = data.pendingJoinRequests;
         }
         if (Array.isArray(data.approvedPlayers)) {
           state.approvedPlayers = data.approvedPlayers;
-          if (state.viewStage === 'player_waiting' && state.playerName && state.approvedPlayers.includes(state.playerName)) {
-            state.viewStage = 'in_room';
-            showToast('主持人已通过你的申请，欢迎 [' + state.playerName + '] 进入房间', 'success');
-            if (!state.tutorialSeenPlayer) {
-              openTutorialModal('player');
-            }
-          }
         }
         if (Array.isArray(data.pendingRequests)) {
           state.pendingRequests = data.pendingRequests;
@@ -2729,7 +2927,7 @@
     };
 
     window.copyRoomInvite = function() {
-      const text = '跑团音频房间码：' + state.roomCode + ' （打开网页输入此房间码，选择玩家端并填写名称即可申请进入）';
+      const text = '混音台房间码：' + state.roomCode + ' （打开网页https://boiledfiiish.github.io/CalamoontyAudio/输入此房间码，选择玩家端并填写名称即可申请进入）';
       try {
         const temp = document.createElement('textarea');
         temp.value = text;
@@ -2769,6 +2967,7 @@
     }
 
     async function saveBlobToIndexedDB(trackId, blob) {
+      if (blob) memoryBlobCache.set(trackId, blob);
       const db = await openAudioDB();
       if (!db) return;
       try {
@@ -2787,13 +2986,17 @@
         req.onsuccess = () => {
           const items = req.result || [];
           let totalBytes = 0;
+          const trackMap = new Map(state.tracks.map(t => [t.id, t]));
           items.forEach(item => {
-            if (item.blob && item.blob.size) totalBytes += item.blob.size;
-            const track = state.tracks.find(t => t.id === item.id);
-            if (track && item.blob && !track.audioUrl) {
-              track.audioUrl = URL.createObjectURL(item.blob);
-              if (track.playing && state.viewStage === 'in_room') {
-                startTrackAudio(track);
+            if (item.blob) {
+              memoryBlobCache.set(item.id, item.blob);
+              if (item.blob.size) totalBytes += item.blob.size;
+              const track = trackMap.get(item.id);
+              if (track && !track.audioUrl) {
+                track.audioUrl = URL.createObjectURL(item.blob);
+                if (track.playing && state.viewStage === 'in_room') {
+                  startTrackAudio(track);
+                }
               }
             }
           });
@@ -2883,6 +3086,7 @@
             biliRef: t.biliRef || '',
             audioUrl: t.sourceType === 'url' ? t.audioUrl : '',
             volume: t.volume,
+            inMixer: Boolean(t.inMixer),
             playing: false,
             loop: t.loop,
             currentTime: 0,
@@ -3009,7 +3213,7 @@
       document.getElementById('player-master-vol-label').textContent = num + '%';
       document.getElementById('player-vol-icon').textContent = num === 0
         ? 'MUTED / 已静音'
-        : 'MASTER VOLUME / 整体音量调节';
+        : 'VOLUME / 音量调节';
       updateMasterGainValue();
     };
 
@@ -3019,7 +3223,7 @@
       if (btn) btn.textContent = state.playerMuted ? '取消静音' : '静音';
       document.getElementById('player-vol-icon').textContent = state.playerMuted
         ? 'MUTED / 已静音'
-        : 'MASTER VOLUME / 整体音量调节';
+        : 'VOLUME / 音量调节';
       updateMasterGainValue();
     };
 
@@ -3030,11 +3234,12 @@
       ensureAudioContext();
       const track = state.tracks.find(t => t.id === trackId);
       if (!track) return;
+      track.inMixer = true; // Keep track on the Mixer console even when paused
       track.playing = !track.playing;
       if (track.playing) {
         startTrackAudio(track);
       } else {
-        stopTrackWithOptionalFade(track);
+        pauseTrackWithOptionalFade(track);
       }
       syncSceneStatesWithTracks();
       broadcastRoomState();
@@ -3042,6 +3247,19 @@
         triggerPrioritySyncAcrossPlayers();
       }
       renderAll();
+    };
+
+    window.removeTrackFromMixer = function(trackId) {
+      const track = state.tracks.find(t => t.id === trackId);
+      if (!track) return;
+      track.playing = false;
+      track.inMixer = false;
+      track.currentTime = 0;
+      stopTrackAudioImmediate(trackId);
+      syncSceneStatesWithTracks();
+      broadcastRoomState();
+      renderAll();
+      showToast('已将曲目移回右侧歌曲仓库', 'info');
     };
 
     window.onTrackVolumeInput = function(trackId, val) {
@@ -3061,12 +3279,12 @@
         }
         entry.audioEl.volume = computeTargetElementVolume(track);
       }
-      broadcastRoomState();
+      scheduleThrottledBroadcast();
     };
 
     window.toggleGlobalFade = function(checked) {
       state.fadeEnabled = checked;
-      showToast(checked ? '已开启 1.5 秒平滑淡入淡出过渡' : '已切换为即时切歌模式', 'info');
+      showToast(checked ? '已开启平滑淡入淡出过渡' : '已切换为即时切换模式', 'info');
       saveStateToLocalStorage();
     };
 
@@ -3074,7 +3292,7 @@
       state.tracks.forEach(t => {
         if (t.playing) {
           t.playing = false;
-          stopTrackWithOptionalFade(t);
+          pauseTrackWithOptionalFade(t);
         }
       });
       state.scenes.forEach(s => { s.active = false; });
@@ -3109,6 +3327,7 @@
           const tr = state.tracks.find(t => t.id === item.id);
           if (tr) {
             tr.volume = item.volume;
+            tr.inMixer = true;
             tr.playing = true;
             startTrackAudio(tr);
           }
@@ -3150,7 +3369,7 @@
       if (!fileList || !fileList.length) return;
       const filesArr = Array.from(fileList);
       closeModal('import-modal');
-      showToast('正在自动压缩并导入 ' + filesArr.length + ' 首音频以加速玩家端缓存...', 'info');
+      showToast('正在自动压缩并导入 ' + filesArr.length + ' 首音频以加速缓存...', 'info');
       const targetFolder = state.currentFolder === '全部曲目' ? '默认曲库' : state.currentFolder;
 
       for (const file of filesArr) {
@@ -3189,18 +3408,16 @@
       const tagsInput = document.getElementById('dm-link-tags');
 
       const rawUrl = (urlInput.value || '').trim();
-      const rawName = (nameInput.value || '').trim() || (rawUrl.includes('BV') ? 'B站导入音频 (' + rawUrl.slice(0, 12) + ')' : '在线导入配乐');
+      const rawName = (nameInput.value || '').trim() || '在线导入配乐';
       if (!rawUrl) {
-        showToast('请输入在线音频链接或 Bilibili 视频链接/BV号', 'warn');
+        showToast('请输入在线音频直链地址', 'warn');
         return;
       }
 
-      const isBili = rawUrl.includes('bilibili.com') || /^BV[a-zA-Z0-9]+/i.test(rawUrl);
       const tags = (tagsInput.value || '')
         .split(/[,，]/)
         .map(s => s.trim())
         .filter(Boolean);
-      if (isBili && !tags.includes('B站')) tags.push('B站');
 
       const targetFolder = state.currentFolder === '全部曲目' ? '默认曲库' : state.currentFolder;
       const newTrack = {
@@ -3209,10 +3426,10 @@
         emoji: (emojiInput.value || 'BGM').trim() || 'BGM',
         folder: targetFolder,
         tags: tags,
-        sourceType: isBili ? 'synth' : 'url',
-        biliRef: isBili ? rawUrl : '',
-        audioUrl: isBili ? '' : rawUrl,
+        sourceType: 'url',
+        audioUrl: rawUrl,
         volume: 70,
+        inMixer: false,
         playing: false,
         loop: true,
         currentTime: 0,
@@ -3225,9 +3442,7 @@
       closeModal('import-modal');
       broadcastRoomState();
       renderAll();
-      showToast(isBili
-        ? '已存入 B站曲目，可配合 Python 助手一键提取音频流'
-        : '已将在线音频存入曲库仓库', 'success');
+      showToast('已将在线音频存入曲库仓库', 'success');
     };
 
     // =====================================================
@@ -3358,6 +3573,8 @@
       if (idx === -1) return;
       const removed = state.tracks[idx];
       stopTrackAudioImmediate(trackId);
+      revokeTrackObjectUrl(removed);
+      deleteBlobFromIndexedDB(trackId);
       state.tracks.splice(idx, 1);
       syncSceneStatesWithTracks();
       broadcastRoomState();
@@ -3374,14 +3591,7 @@
       document.getElementById('player-req-emoji').value = emoji;
     };
 
-    window.togglePlayerSourceInput = function() {
-      const checked = document.querySelector('input[name="player-source-type"]:checked');
-      const isFile = !checked || checked.value === 'file';
-      document.getElementById('player-file-box').classList.toggle('hidden', !isFile);
-      document.getElementById('player-url-box').classList.toggle('hidden', isFile);
-    };
-
-    window.onPlayerFileSelected = function(input) {
+window.onPlayerFileSelected = function(input) {
       if (input.files && input.files[0]) {
         pendingPlayerFileBlob = input.files[0];
         const nameInput = document.getElementById('player-req-name');
@@ -3405,11 +3615,12 @@
         return;
       }
 
-      const checked = document.querySelector('input[name="player-source-type"]:checked');
-      const isFile = !checked || checked.value === 'file';
-      const rawUrl = (document.getElementById('player-req-url').value || '').trim();
+      if (!pendingPlayerFileBlob) {
+        showToast('请先选择要上传的本地音频文件', 'warn');
+        return;
+      }
 
-      const dispatchRequest = (resolvedAudioUrl, resolvedSourceType) => {
+      const dispatchRequest = (resolvedAudioUrl) => {
         const reqId = 'req_' + Date.now();
         const reqObj = {
           reqId: reqId,
@@ -3417,7 +3628,7 @@
           name: name,
           emoji: emoji,
           tags: tags,
-          sourceType: resolvedSourceType,
+          sourceType: 'file',
           audioUrl: resolvedAudioUrl,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         };
@@ -3432,6 +3643,8 @@
         });
 
         document.getElementById('player-req-name').value = '';
+        const fileIn = document.getElementById('player-req-file');
+        if (fileIn) fileIn.value = '';
         pendingPlayerFileBlob = null;
 
         sendPacketToRoom({
@@ -3443,20 +3656,14 @@
         showToast('播放申请已发送给主持人', 'success');
       };
 
-      if (isFile && pendingPlayerFileBlob) {
-        showToast('正在自动压缩音频并发送给主持人...', 'info');
-        compressAudioFileForTRPG(pendingPlayerFileBlob).then((compactBlob) => {
-          const reader = new FileReader();
-          reader.onload = (e) => {
-            dispatchRequest(e.target.result, 'file');
-          };
-          reader.readAsDataURL(compactBlob);
-        });
-      } else if (!isFile && rawUrl) {
-        dispatchRequest(rawUrl, rawUrl.includes('BV') ? 'synth' : 'url');
-      } else {
-        dispatchRequest('', 'synth');
-      }
+      showToast('正在自动压缩音频并发送给主持人...', 'info');
+      compressAudioFileForTRPG(pendingPlayerFileBlob).then((compactBlob) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          dispatchRequest(e.target.result);
+        };
+        reader.readAsDataURL(compactBlob);
+      });
     };
 
     window.handleDmApproveRequest = function(reqId, action) {
@@ -3478,6 +3685,7 @@
           sourceType: req.sourceType || 'synth',
           audioUrl: req.audioUrl || '',
           volume: 75,
+          inMixer: action === 'play_now',
           playing: action === 'play_now',
           loop: true,
           currentTime: 0,
@@ -3511,12 +3719,12 @@
             hist.status = 'approved_save';
             hist.statusText = '已通过并收入曲库（暂不播放）';
           }
-          showToast('已将曲目收入「玩家投递」文件夹（暂不播放）', 'info');
+          showToast('已将曲目收入「玩家投递」文件夹', 'info');
         }
       } else {
         if (hist) {
           hist.status = 'rejected';
-          hist.statusText = '申请未通过（未加入曲库）';
+          hist.statusText = '申请未通过';
         }
         showToast('已拒绝该播放申请', 'warn');
       }
@@ -3529,6 +3737,14 @@
     // =====================================================
     // 11. ROOM THEME & BACKGROUND IMAGE CUSTOMIZATION
     // =====================================================
+    window.selectColorMode = function(mode) {
+      state.theme.colorMode = mode === 'light' ? 'light' : 'dark';
+      saveCurrentRoomTheme();
+      syncThemeModalInputs();
+      applyThemeToDOM();
+      broadcastRoomState();
+    };
+
     window.selectAccentColor = function(hex) {
       state.theme.accent = hex;
       const picker = document.getElementById('theme-accent-picker');
@@ -3545,7 +3761,7 @@
         saveCurrentRoomTheme();
         applyThemeToDOM();
         broadcastRoomState();
-        showToast('房间背景图片已更新并同步给玩家', 'success');
+        showToast('房间背景图片已更新并同步', 'success');
       };
       reader.readAsDataURL(input.files[0]);
     };
@@ -3559,7 +3775,7 @@
       saveCurrentRoomTheme();
       applyThemeToDOM();
       broadcastRoomState();
-      showToast('已删除背景图片并恢复默认深色背景', 'info');
+      showToast('已删除背景图片', 'info');
     };
 
     window.previewThemeChanges = function() {
@@ -3598,16 +3814,28 @@
 
     function applyThemeToDOM() {
       const root = document.documentElement;
-      const accent = state.theme.accent || '#e14141';
+      const isLight = state.theme && state.theme.colorMode === 'light';
+      document.body.classList.toggle('light-mode', isLight);
+
+      const rawAccent = String(state.theme.accent || '#e14141').trim();
+      const accent = /^#[0-9a-fA-F]{3,8}$/.test(rawAccent) ? rawAccent : '#e14141';
       root.style.setProperty('--accent', accent);
-      root.style.setProperty('--accent-soft', hexToRgba(accent, 0.14));
+      root.style.setProperty('--accent-soft', hexToRgba(accent, isLight ? 0.12 : 0.14));
       root.style.setProperty('--accent-border', hexToRgba(accent, 0.42));
-      root.style.setProperty('--bg-overlay', `rgba(14, 15, 18, ${(state.theme.bgDim || 92) / 100})`);
-      root.style.setProperty('--bg-blur', (state.theme.bgBlur ?? 16) + 'px');
+      const dim = Math.max(40, Math.min(96, Number(state.theme.bgDim) || 92));
+      const blur = Math.max(0, Math.min(28, Number(state.theme.bgBlur) ?? 16));
+      root.style.setProperty(
+        '--bg-overlay',
+        isLight ? `rgba(244, 244, 246, ${dim / 100})` : `rgba(14, 15, 18, ${dim / 100})`
+      );
+      root.style.setProperty('--bg-blur', blur + 'px');
 
       const bgLayer = document.getElementById('room-bg-layer');
       if (bgLayer) {
-        bgLayer.style.backgroundImage = state.theme.bgImage ? `url("${state.theme.bgImage}")` : 'none';
+        const rawBg = String(state.theme.bgImage || '').trim();
+        const isSafeBg = rawBg.startsWith('data:image/') || rawBg.startsWith('https://') || rawBg.startsWith('./');
+        const safeCssBg = isSafeBg ? rawBg.replace(/["()\n\r\\]/g, '') : '';
+        bgLayer.style.backgroundImage = safeCssBg ? `url("${safeCssBg}")` : 'none';
       }
       const titleEl = document.getElementById('room-title-display');
       if (titleEl && state.theme.roomTitle) {
@@ -3708,7 +3936,28 @@
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function escapeJsAttr(str) {
+      return String(str ?? '')
+        .replace(/\\/g, '\\\\')
+        .replace(/'/g, "\\'")
+        .replace(/"/g, '&quot;')
+        .replace(/\n/g, ' ')
+        .replace(/\r/g, '')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+    }
+
+    function sanitizeAudioUrl(url) {
+      const clean = String(url ?? '').trim();
+      if (!clean) return '';
+      if (clean.startsWith('blob:') || clean.startsWith('data:audio/') || clean.startsWith('./') || clean.startsWith('https://')) {
+        return clean;
+      }
+      return '';
     }
 
     // =====================================================
@@ -3728,7 +3977,7 @@
         badge.textContent = 'HOST OCCUPIED · 主持人席位已占用';
         dmBtn.disabled = true;
         dmBtn.className = 'w-full py-3.5 rounded-xl text-xs font-medium bg-white/5 text-zinc-500 cursor-not-allowed';
-        dmBtn.textContent = '主持人端正在被使用（不可选）';
+        dmBtn.textContent = '主持人端正在被使用';
         if (dmTag) {
           dmTag.className = 'text-xs font-mono-code px-2.5 py-0.5 rounded bg-rose-500/15 text-rose-300';
           dmTag.textContent = '已锁定';
@@ -3742,7 +3991,7 @@
         dmBtn.textContent = '以主持人身份进入房间';
         if (dmTag) {
           dmTag.className = 'text-xs font-mono-code px-2.5 py-0.5 rounded bg-white/5 text-zinc-400';
-          dmTag.textContent = '唯一席位';
+          dmTag.textContent = '混音台';
         }
         if (dmCard) dmCard.classList.remove('opacity-50');
       }
@@ -3750,7 +3999,6 @@
 
     function renderViewStageVisibility() {
       const lobbySec = document.getElementById('lobby-view-section');
-      const waitingSec = document.getElementById('player-waiting-section');
       const activeShell = document.getElementById('room-active-shell');
       const dmSec = document.getElementById('dm-view-section');
       const playerSec = document.getElementById('player-view-section');
@@ -3822,23 +4070,12 @@
 
       if (state.viewStage === 'lobby') {
         lobbySec.classList.remove('hidden');
-        waitingSec.classList.add('hidden');
         activeShell.classList.add('hidden');
         renderLobbyState();
         return;
       }
 
-      if (state.viewStage === 'player_waiting') {
-        lobbySec.classList.add('hidden');
-        waitingSec.classList.remove('hidden');
-        activeShell.classList.add('hidden');
-        document.getElementById('waiting-player-name-label').textContent = state.playerName || '玩家';
-        document.getElementById('waiting-room-code-label').textContent = state.roomCode;
-        return;
-      }
-
       lobbySec.classList.add('hidden');
-      waitingSec.classList.add('hidden');
       activeShell.classList.remove('hidden');
 
       if (state.role === 'dm') {
@@ -3858,40 +4095,7 @@
       }
     }
 
-    function renderJoinApprovalBanner() {
-      const banner = document.getElementById('dm-join-approval-banner');
-      const countEl = document.getElementById('pending-join-count-num');
-      const listEl = document.getElementById('pending-join-list');
-      if (!banner || !listEl) return;
 
-      if (state.role !== 'dm' || state.pendingJoinRequests.length === 0) {
-        banner.classList.add('hidden');
-        return;
-      }
-
-      banner.classList.remove('hidden');
-      countEl.textContent = state.pendingJoinRequests.length;
-      listEl.innerHTML = state.pendingJoinRequests.map(req => `
-        <div class="glass-card p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div class="space-y-1">
-            <div class="text-sm font-medium text-white">
-              申请玩家名称：<span class="text-emerald-300">${escapeHtml(req.playerName)}</span>
-            </div>
-            <div class="text-xs text-zinc-500 font-mono-code">
-              TIME ${escapeHtml(req.timestamp)} · ROOM ${escapeHtml(state.roomCode)}
-            </div>
-          </div>
-          <div class="flex items-center gap-3">
-            <button onclick="handleDmApproveJoin('${req.joinId}', true)" class="px-5 py-2.5 rounded-xl text-xs font-medium btn-accent">
-              准许 [${escapeHtml(req.playerName)}] 进入房间
-            </button>
-            <button onclick="handleDmApproveJoin('${req.joinId}', false)" class="px-4 py-2.5 rounded-xl text-xs text-rose-300 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20">
-              拒绝
-            </button>
-          </div>
-        </div>
-      `).join('');
-    }
 
     function renderApprovalBanner() {
       const banner = document.getElementById('dm-approval-banner');
@@ -3938,23 +4142,25 @@
       const badge = document.getElementById('dm-active-tracks-badge');
       if (!container) return;
 
-      const playingTracks = state.tracks.filter(t => t.playing);
-      if (badge) badge.textContent = playingTracks.length + ' ACTIVE';
+      const mixerTracks = state.tracks.filter(t => t.inMixer || t.playing);
+      const playingCount = mixerTracks.filter(t => t.playing).length;
+      if (badge) badge.textContent = playingCount + ' PLAYING / ' + mixerTracks.length + ' IN MIXER';
 
-      if (playingTracks.length === 0) {
+      if (mixerTracks.length === 0) {
         container.innerHTML = `
           <div class="glass-card py-14 px-6 text-center text-xs text-zinc-500 leading-relaxed">
-            当前暂无正在播放的混音轨。<br />请先在右侧仓库导入音频并点击「播放」，即可在此实时调节音量与拖动进度。
+            当前暂无混音轨。<br />请先在右侧仓库导入音频并点击「播放」，即可将曲目加入此处进行混音、暂停或拖动进度。
           </div>
         `;
         return;
       }
 
-      container.innerHTML = playingTracks.map(t => {
+      container.innerHTML = mixerTracks.map(t => {
         const dur = Math.max(1, Math.floor(t.duration || 180));
         const cur = Math.min(dur, Math.max(0, Math.floor(t.currentTime || 0)));
+        const isPlaying = Boolean(t.playing);
         return `
-          <div class="glass-card playing-card p-6 space-y-5">
+          <div class="glass-card ${isPlaying ? 'playing-card' : ''} p-6 space-y-5">
             <div class="flex items-start justify-between gap-4">
               <div class="space-y-1 min-w-0">
                 <div class="flex items-center gap-2.5">
@@ -3962,15 +4168,22 @@
                   <span class="text-sm font-medium text-white truncate">${escapeHtml(t.name)}</span>
                 </div>
                 <div class="text-xs text-zinc-400 flex items-center gap-2.5 pt-0.5">
-                  <span class="flex items-end gap-0.5 h-3">
-                    <span class="eq-bar"></span><span class="eq-bar"></span><span class="eq-bar"></span>
-                  </span>
+                  ${isPlaying ? `
+                    <span class="flex items-end gap-0.5 h-3">
+                      <span class="eq-bar"></span><span class="eq-bar"></span><span class="eq-bar"></span>
+                    </span>
+                  ` : `<span class="text-[11px] font-mono-code text-zinc-500">PAUSED</span>`}
                   <span>${escapeHtml(t.folder)}</span>
                 </div>
               </div>
-              <button onclick="toggleTrackPlay('${t.id}')" class="px-4 py-1.5 rounded-xl text-xs font-medium btn-accent shrink-0">
-                停止
-              </button>
+              <div class="flex items-center gap-2 shrink-0">
+                <button onclick="toggleTrackPlay('${t.id}')" class="px-3.5 py-1.5 rounded-xl text-xs font-medium ${isPlaying ? 'btn-accent' : 'bg-white/10 hover:bg-white/15 text-white'}">
+                  ${isPlaying ? '暂停' : '播放'}
+                </button>
+                <button onclick="removeTrackFromMixer('${t.id}')" class="px-3 py-1.5 rounded-xl text-xs text-zinc-400 hover:text-rose-300 bg-white/5 hover:bg-rose-500/15 border border-white/10 transition" title="从混音台移除回仓库">
+                  删除
+                </button>
+              </div>
             </div>
 
             <!-- Interactive Playback Progress Seek Bar -->
@@ -4034,28 +4247,31 @@
     };
 
     function renderFoldersAndPills() {
+      // Single O(N) pass to compute folder counts, emoji set, and tag set
+      const folderCounts = new Map();
+      const emojiSet = new Set();
+      const tagSet = new Set();
+      state.tracks.forEach(t => {
+        if (t.folder) folderCounts.set(t.folder, (folderCounts.get(t.folder) || 0) + 1);
+        if (t.emoji) emojiSet.add(t.emoji);
+        (t.tags || []).forEach(tag => tagSet.add(tag));
+      });
+
       const folderContainer = document.getElementById('folder-list-container');
       if (folderContainer) {
         folderContainer.innerHTML = state.folders.map(folder => {
           const count = folder === '全部曲目'
             ? state.tracks.length
-            : state.tracks.filter(t => t.folder === folder).length;
+            : (folderCounts.get(folder) || 0);
           const active = state.currentFolder === folder;
           return `
-            <button onclick="selectFolder('${escapeHtml(folder)}')" class="px-4 py-2 rounded-xl text-xs flex items-center gap-2 transition ${active ? 'btn-accent font-medium' : 'bg-white/5 text-zinc-400 hover:text-white hover:bg-white/10 border border-white/5'}">
+            <button onclick="selectFolder('${escapeJsAttr(folder)}')" class="px-4 py-2 rounded-xl text-xs flex items-center gap-2 transition ${active ? 'btn-accent font-medium' : 'bg-white/5 text-zinc-400 hover:text-white hover:bg-white/10 border border-white/5'}">
               <span>${escapeHtml(folder)}</span>
               <span class="text-[11px] font-mono-code opacity-75">${count}</span>
             </button>
           `;
         }).join('');
       }
-
-      const emojiSet = new Set();
-      const tagSet = new Set();
-      state.tracks.forEach(t => {
-        if (t.emoji) emojiSet.add(t.emoji);
-        (t.tags || []).forEach(tag => tagSet.add(tag));
-      });
 
       const emojiContainer = document.getElementById('quick-emoji-pills');
       if (emojiContainer) {
@@ -4064,7 +4280,7 @@
           : Array.from(emojiSet).map(em => {
               const active = state.searchMode === 'emoji' && state.searchQuery === em;
               return `
-                <button onclick="quickFilterByEmoji('${escapeHtml(em)}')" class="px-2.5 py-1 rounded-lg text-[11px] font-mono-code border transition ${active ? 'badge-accent' : 'bg-white/5 border-white/5 text-zinc-400 hover:text-white'}">
+                <button onclick="quickFilterByEmoji('${escapeJsAttr(em)}')" class="px-2.5 py-1 rounded-lg text-[11px] font-mono-code border transition ${active ? 'badge-accent' : 'bg-white/5 border-white/5 text-zinc-400 hover:text-white'}">
                   ${escapeHtml(em)}
                 </button>
               `;
@@ -4078,7 +4294,7 @@
           : Array.from(tagSet).slice(0, 10).map(tg => {
               const active = state.searchMode === 'tag' && state.searchQuery === tg;
               return `
-                <button onclick="quickFilterByTag('${escapeHtml(tg)}')" class="px-3 py-1 rounded-full text-xs border transition ${active ? 'badge-accent' : 'bg-white/5 border-white/5 text-zinc-400 hover:text-white'}">
+                <button onclick="quickFilterByTag('${escapeJsAttr(tg)}')" class="px-3 py-1 rounded-full text-xs border transition ${active ? 'badge-accent' : 'bg-white/5 border-white/5 text-zinc-400 hover:text-white'}">
                   #${escapeHtml(tg)}
                 </button>
               `;
@@ -4139,7 +4355,7 @@
               ${t.playing ? '播放中' : '播放'}
             </button>
 
-            <button onclick="quickFilterByEmoji('${escapeHtml(t.emoji)}')" class="text-xs font-mono-code px-2.5 py-1 rounded bg-white/5 hover:bg-white/10 text-zinc-300 border border-white/10 shrink-0" title="按此代号筛选">
+            <button onclick="quickFilterByEmoji('${escapeJsAttr(t.emoji)}')" class="text-xs font-mono-code px-2.5 py-1 rounded bg-white/5 hover:bg-white/10 text-zinc-300 border border-white/10 shrink-0" title="按此代号筛选">
               ${escapeHtml(t.emoji)}
             </button>
 
@@ -4151,7 +4367,7 @@
               </div>
               <div class="flex flex-wrap gap-2">
                 ${(t.tags || []).map(tag => `
-                  <button onclick="quickFilterByTag('${escapeHtml(tag)}')" class="text-[11px] text-zinc-400 hover:text-white">
+                  <button onclick="quickFilterByTag('${escapeJsAttr(tag)}')" class="text-[11px] text-zinc-400 hover:text-white">
                     #${escapeHtml(tag)}
                   </button>
                 `).join('')}
@@ -4180,6 +4396,58 @@
     }
 
     function renderPlayerView() {
+      const selfBadgesEl = document.getElementById('player-self-telemetry-badges');
+      if (selfBadgesEl && state.role === 'player') {
+        const isConnected = hostFoundViaAnyChannel || peerConnections.some(c => c && c.open);
+        const fileTracks = state.tracks.filter(t => t.sourceType === 'file');
+        const cachedFiles = fileTracks.filter(t => Boolean(t.audioUrl)).length;
+        const activeTracks = state.tracks.filter(t => t.playing);
+        const activeReady = activeTracks.every(t => Boolean(t.audioUrl));
+
+        const connHtml = isConnected
+          ? '<span class="text-emerald-400 font-medium">已连接房间</span>'
+          : '<span class="text-amber-400">正在连接...</span>';
+
+        const cacheHtml = fileTracks.length === 0
+          ? '<span class="text-zinc-400">无待缓存曲目</span>'
+          : (cachedFiles >= fileTracks.length
+            ? `<span class="text-emerald-400">缓存已就绪 (${cachedFiles}/${fileTracks.length})</span>`
+            : `<span class="text-amber-400">正在缓存 (${cachedFiles}/${fileTracks.length})</span>`);
+
+        let playHtml = '<span class="text-zinc-400">待机就绪</span>';
+        if (!state.localPlayerAudioUnlocked) {
+          playHtml = '<span class="text-rose-400 font-medium">未激活音频</span>';
+        } else if (state.tabAudioSharing) {
+          playHtml = '<span class="text-emerald-400 font-medium">正在收听标签页广播</span>';
+        } else if (activeTracks.length > 0) {
+          playHtml = activeReady
+            ? `<span class="text-emerald-400 font-medium">正在同步播放 (${activeTracks.length}轨)</span>`
+            : '<span class="text-amber-400">正在缓冲当前曲目...</span>';
+        }
+
+        const stEl = document.getElementById('player-stream-status');
+        if (stEl) {
+          if (!state.localPlayerAudioUnlocked) {
+            stEl.textContent = '请点击右侧「校准并激活音频」以解锁音频';
+            stEl.className = 'text-rose-400 font-medium';
+          } else if (activeTracks.length > 0 || state.tabAudioSharing) {
+            stEl.textContent = '音频已激活 · 正在同步播放';
+            stEl.className = 'text-emerald-400';
+          } else {
+            stEl.textContent = '音频已激活 · 等待主持人播放';
+            stEl.className = 'text-zinc-400';
+          }
+        }
+
+        selfBadgesEl.innerHTML = `
+          ${connHtml}
+          <span class="text-zinc-600">·</span>
+          ${cacheHtml}
+          <span class="text-zinc-600">·</span>
+          ${playHtml}
+        `;
+      }
+
       const histEl = document.getElementById('player-request-history');
       if (!histEl) return;
 
@@ -4206,7 +4474,6 @@
 
     function renderAll() {
       renderViewStageVisibility();
-      renderJoinApprovalBanner();
       renderApprovalBanner();
       renderActiveMixer();
       renderScenePresets();
