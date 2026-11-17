@@ -207,7 +207,7 @@
       <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div class="space-y-3">
           <div class="text-xs font-mono-code uppercase tracking-widest text-zinc-500">
-            TRPG AUDIO SYNC SYSTEM · v2.8
+            TRPG AUDIO SYNC SYSTEM · v2.9
           </div>
           <h1 class="text-3xl sm:text-4xl font-light text-white tracking-tight">
             进入跑团音频房间
@@ -344,7 +344,7 @@
           </span>
           <span class="text-zinc-600">·</span>
           <span class="text-xs font-mono-code text-zinc-400">
-            v2.8 · ROOM <strong id="header-room-code-text" class="text-zinc-200 font-normal">TRPG-8842</strong>
+            v2.9 · ROOM <strong id="header-room-code-text" class="text-zinc-200 font-normal">TRPG-8842</strong>
           </span>
         </div>
         <h1 id="room-title-display" class="text-2xl sm:text-3xl font-light text-white tracking-tight">
@@ -851,60 +851,62 @@
     </div>
   </div>
 
-  <!-- ========================================== -->
-  <!-- MODAL 5: INTERACTIVE TUTORIAL (SKIPPABLE)  -->
-  <!-- ========================================== -->
-  <div id="tutorial-modal" class="fixed inset-0 z-50 hidden bg-black/80 backdrop-blur-md flex items-center justify-center p-6">
-    <div class="glass-panel max-w-xl w-full p-8 sm:p-10 space-y-7 border border-white/15">
-      <!-- Top Bar: Role Tabs + Skip Button -->
-      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-5">
+  <!-- ========================================================= -->
+  <!-- INTERACTIVE SPOTLIGHT GUIDED TOUR (HIGHLIGHTS REAL UI)    -->
+  <!-- ========================================================= -->
+  <div id="tutorial-modal" class="fixed inset-0 z-50 hidden pointer-events-none">
+    <!-- Animated Spotlight Cutout Box around the active target element -->
+    <div id="tour-spotlight-box" style="position: fixed; top: 20%; left: 20%; width: 200px; height: 60px; border-radius: 14px; box-shadow: 0 0 0 9999px rgba(8, 9, 12, 0.72), 0 0 0 2px var(--accent), 0 0 28px var(--accent-soft); transition: all 0.28s cubic-bezier(0.22, 1, 0.36, 1); pointer-events: none; z-index: 51;"></div>
+
+    <!-- Floating Coachmark Popover Card positioned right next to the highlighted element -->
+    <div id="tour-popover-card" style="position: fixed; top: 30%; left: 20%; z-index: 52; transition: top 0.28s cubic-bezier(0.22, 1, 0.36, 1), left 0.28s cubic-bezier(0.22, 1, 0.36, 1);" class="pointer-events-auto glass-panel w-[340px] sm:w-[400px] p-6 space-y-4 border border-white/20 shadow-2xl">
+      <!-- Top Bar: Step Indicator + Skip Button -->
+      <div class="flex items-center justify-between gap-2 border-b border-white/10 pb-3">
         <div class="flex items-center gap-2">
-          <button id="tut-tab-host" onclick="switchTutorialTab('host')" class="px-4 py-2 rounded-xl text-xs font-medium btn-accent">
-            主持人端教程
-          </button>
-          <button id="tut-tab-player" onclick="switchTutorialTab('player')" class="px-4 py-2 rounded-xl text-xs font-medium bg-white/5 text-zinc-400 hover:text-white">
-            玩家端教程
-          </button>
+          <span id="tutorial-step-indicator" class="text-[11px] font-mono-code uppercase tracking-widest text-accent">
+            STEP 01 / 04
+          </span>
+          <span class="text-zinc-600">·</span>
+          <span id="tutorial-role-label" class="text-[11px] font-mono-code text-zinc-400">
+            界面实地引导
+          </span>
         </div>
 
-        <button onclick="skipTutorial()" class="text-xs font-mono-code text-zinc-400 hover:text-white px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 transition self-end sm:self-auto">
+        <button onclick="skipTutorial()" class="text-xs font-mono-code text-zinc-400 hover:text-white px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 transition">
           跳过教程 / SKIP
         </button>
       </div>
 
-      <!-- Step Content -->
-      <div class="space-y-4 py-2">
-        <div class="flex items-center justify-between">
-          <span id="tutorial-step-indicator" class="text-xs font-mono-code uppercase tracking-widest text-accent">
-            STEP 01 / 04
-          </span>
-          <span id="tutorial-role-label" class="text-xs font-mono-code text-zinc-500">
-            HOST GUIDE
-          </span>
-        </div>
+      <!-- Hidden role tabs kept for compatibility -->
+      <div class="hidden">
+        <button id="tut-tab-host" onclick="switchTutorialTab('host')">主持人端教程</button>
+        <button id="tut-tab-player" onclick="switchTutorialTab('player')">玩家端教程</button>
+      </div>
 
-        <h3 id="tutorial-step-title" class="text-xl font-light text-white">
+      <!-- Step Content -->
+      <div class="space-y-2.5">
+        <h3 id="tutorial-step-title" class="text-base font-medium text-white">
           教程标题
         </h3>
 
-        <p id="tutorial-step-desc" class="text-xs sm:text-sm text-zinc-300 leading-relaxed">
+        <p id="tutorial-step-desc" class="text-xs text-zinc-300 leading-relaxed">
           教程内容描述
         </p>
 
-        <div id="tutorial-step-tip" class="glass-card p-4 text-xs text-zinc-400 leading-relaxed">
+        <div id="tutorial-step-tip" class="glass-card p-3 text-[11px] text-zinc-400 leading-relaxed">
           提示详情
         </div>
       </div>
 
       <!-- Progress Dots & Navigation Footer -->
-      <div class="flex items-center justify-between pt-4 border-t border-white/10">
-        <div id="tutorial-dots" class="flex items-center gap-2"></div>
+      <div class="flex items-center justify-between pt-3 border-t border-white/10">
+        <div id="tutorial-dots" class="flex items-center gap-1.5"></div>
 
-        <div class="flex items-center gap-3">
-          <button id="btn-tut-prev" onclick="prevTutorialStep()" class="px-4 py-2.5 rounded-xl text-xs bg-white/5 hover:bg-white/10 text-zinc-300 border border-white/10 transition">
+        <div class="flex items-center gap-2">
+          <button id="btn-tut-prev" onclick="prevTutorialStep()" class="px-3.5 py-2 rounded-xl text-xs bg-white/5 hover:bg-white/10 text-zinc-300 border border-white/10 transition">
             上一步
           </button>
-          <button id="btn-tut-next" onclick="nextTutorialStep()" class="px-5 py-2.5 rounded-xl text-xs font-medium btn-accent">
+          <button id="btn-tut-next" onclick="nextTutorialStep()" class="px-4 py-2 rounded-xl text-xs font-medium btn-accent">
             下一步
           </button>
         </div>
@@ -999,43 +1001,76 @@
     // 1.5 INTERACTIVE TUTORIAL DATA & CONTROLLER (HOST & PLAYER)
     // =====================================================
     const TUTORIAL_STEPS = {
+      lobby: [
+        {
+          targetId: 'lobby-room-code-input',
+          title: '1. 设置或输入房间频道码',
+          desc: '在这里输入你们这桌专属的房间码（如 fishtable）。不同房间码之间完全独立，A 桌和 B 桌同时跑团互不干扰。',
+          tip: '提示：点右侧「复制房间码」即可一键发给同桌玩家。'
+        },
+        {
+          targetId: 'lobby-card-dm',
+          title: '2. 主持人（DM）唯一入口',
+          desc: '如果你是带团主持人，点击这里创建并开启房间。当房间里已有主持人在线时，此按钮会自动锁死，防止其他人误点。',
+          tip: '提示：必须由主持人先开启房间，玩家才能连入。'
+        },
+        {
+          targetId: 'btn-enter-as-player',
+          title: '3. 玩家同码直连入口',
+          desc: '如果你是玩家，在上方填好你的名字，确认房间码与主持人一致后点击此按钮即可直接进房，网页会自动记住你的名字与房间码。',
+          tip: '提示：若主持人尚未开房，页面会提示「房间不存在」。'
+        }
+      ],
       host: [
         {
-          title: '第一步：分房间码与好友直连',
-          desc: '进入房间前确认顶部的「房间频道码」并复制发给玩家。不同桌输入不同的房间码即可完全隔离、互不干扰；玩家输入相同房间码即可直接进入本房间同步收听。',
-          tip: '提示：已准入的玩家名单会实时显示在顶部标题栏下方。'
+          targetId: 'btn-open-import',
+          title: '1. 导入本地音频与在线链接',
+          desc: '点击这里的「+ 导入音频或链接」，可多选上传电脑里的 MP3 / WAV 等音频文件（永久保存在你的浏览器本地仓库，刷新不丢失），或添加在线链接。',
+          tip: '提示：玩家进房后，系统会自动按优先级将你播放的曲目同步给玩家。'
         },
         {
-          title: '第二步：导入本地音频与在线 / B站链接',
-          desc: '初始曲库为空。点击右上角或右侧仓库的「+ 导入音频」，你可以一次性多选上传电脑里的 MP3 / WAV / OGG 音频文件（自动保存在你的浏览器本地仓库，刷新不丢失），或添加在线音频直链。',
-          tip: '提示：如需使用 Bilibili 视频音乐，可运行配套的 trpg_audio_helper.py 提取高音质音频后拖入曲库。'
+          targetId: 'repo-search-input',
+          title: '2. 右侧歌曲仓库与快速检索',
+          desc: '你导入的所有音频都会列在右侧仓库中。可以通过上方的文件夹分类切换，或在此搜索框按歌曲名、Tag 标签、代号快速找到需要的配乐。',
+          tip: '提示：点击任意曲目上的「播放」按钮，即可将其送入左侧混音台。'
         },
         {
-          title: '第三步：左右分栏混音、进度拖动与场景开关',
-          desc: '右侧「歌曲仓库」用于按文件夹、名称、Tag 或代号检索曲目；点击「播放」后，音轨会出现在左侧「正在播放的混音轨」中。你可以同时叠放多条音频，独立调节每条音轨的音量、拖动播放进度条，或将当前组合保存为「场景预设（Scenes）」随时一键开启或关闭。',
-          tip: '提示：勾选「1.5秒平滑淡入淡出」可让切歌与开关过渡更自然。'
+          targetId: 'active-mixer-channels',
+          title: '3. 左侧多轨混音台与进度拖动',
+          desc: '正在播放的所有音轨都会集中在左侧。你可以同时叠放多首环境音与 BGM，独立调节每条音轨的音量，或直接拖动进度条（PROGRESS）跳转时间。',
+          tip: '提示：勾选上方「1.5秒平滑淡入淡出」可让切歌过渡更自然。'
         },
         {
-          title: '第四步：审批玩家投递与同步房间外观',
-          desc: '当玩家向你投递歌曲时，顶部会弹出通知并显示歌曲名与玩家名，你可选择「通过并立即播放」、「仅收入曲库」或「拒绝」。点击顶部「房间外观」还可自定义强调色与背景图，房间内的所有玩家端会自动同步视觉效果。',
-          tip: '提示：你可以随时点击顶部导航栏的「使用教程」再次查看本指南。'
+          targetId: 'scene-presets-bar',
+          title: '4. 场景组合预设（Scenes）开关',
+          desc: '当你同时调好几条音轨的音量（比如雨声 + 战斗曲）后，点上方「保存为场景预设」就会生成场景按钮。点击场景即可一键开启（ON）或关闭（OFF）整套组合。',
+          tip: '提示：系统会自动优先把场景关联的歌曲预热同步给玩家。'
+        },
+        {
+          targetId: 'btn-open-theme',
+          title: '5. 房间外观定制与全员同步',
+          desc: '点击「房间外观」可以自定义本房间的高亮强调色或上传背景图。外观仅对当前房间生效，房间内的所有玩家会自动同步显示。',
+          tip: '提示：退回主界面或去其他房间会自动恢复，不会串房间。'
         }
       ],
       player: [
         {
-          title: '第一步：输入房间码直接进入房间',
-          desc: '在入口大厅输入主持人发给你的「房间频道码」，在右侧玩家卡片填写你的「玩家名称 / 角色名」，然后点击「以玩家身份进入房间」即可直接连线进入。',
-          tip: '提示：如果提示房间不存在，请提醒主持人先以主持人身份开启该房间码。'
+          targetId: 'btn-unlock-audio',
+          title: '1. 点击校准并激活声音',
+          desc: '刚进入房间或刷新网页后，请先点击一次这里的「校准并激活音频」，用于解锁浏览器的自动播放限制，确保能立刻听到主持人的音乐。',
+          tip: '提示：系统会优先同步并播放主持人当前正在播放的曲目。'
         },
         {
-          title: '第二步：校准音频与调节个人总音量',
-          desc: '进入房间后，先点击一次「校准并激活音频」以解锁浏览器的自动播放限制。当主持人播放或混音多条音轨时，你会实时同步听到完全一致的声音。',
-          tip: '提示：拖动页面中央的「整体音量调节」滑块或点击「静音」仅影响你自己的耳机音量，不会干扰其他人。'
+          targetId: 'player-master-slider',
+          title: '2. 调节你自己的耳机总音量',
+          desc: '左右拖动这根滑块（或点击左侧「静音」）可以随时调节你自己听到的整体音量大小，完全不会影响主持人和其他玩家。',
+          tip: '提示：下方「清理本地音频缓存」可在跑完团后一键释放浏览器空间。'
         },
         {
-          title: '第三步：向主持人申请播放歌曲',
-          desc: '如果你想在跑团时播放角色专属配乐或推荐曲目，点击下方折叠栏「向主持人申请播放歌曲」即可展开面板，上传本地音频文件或粘贴链接后发送申请（系统会自动附带你的玩家名称，无需重复填写）。',
-          tip: '提示：主持人通过或拒绝你的申请后，面板底部的「申请回执」会实时显示结果提示。'
+          targetId: 'player-drawer-arrow',
+          title: '3. 展开面板向主持人投递歌曲',
+          desc: '想向主持人推荐或申请播放角色曲时，点击这里即可展开折叠面板，上传本地音频文件或粘贴链接发送给主持人审批。',
+          tip: '提示：主持人点击通过或拒绝后，展开面板底部会实时显示回执结果。'
         }
       ]
     };
@@ -1043,11 +1078,20 @@
     let currentTutRole = 'host';
     let currentTutIndex = 0;
 
+    function getActiveTutorialKey() {
+      if (state.viewStage === 'lobby') return 'lobby';
+      return state.role === 'player' ? 'player' : 'host';
+    }
+
     window.openTutorialModal = function(role) {
-      currentTutRole = role === 'player' ? 'player' : 'host';
+      if (state.viewStage === 'lobby') {
+        currentTutRole = 'lobby';
+      } else {
+        currentTutRole = role === 'player' ? 'player' : 'host';
+      }
       currentTutIndex = 0;
-      renderTutorialStep();
       openModal('tutorial-modal');
+      renderTutorialStep();
     };
 
     window.openCurrentRoleTutorial = function() {
@@ -1080,33 +1124,82 @@
     window.skipTutorial = function() {
       if (currentTutRole === 'host') {
         state.tutorialSeenHost = true;
-      } else {
+      } else if (currentTutRole === 'player') {
         state.tutorialSeenPlayer = true;
       }
       saveStateToLocalStorage();
       closeModal('tutorial-modal');
     };
 
+    function positionTourSpotlight() {
+      const modal = document.getElementById('tutorial-modal');
+      if (!modal || modal.classList.contains('hidden')) return;
+      const steps = TUTORIAL_STEPS[currentTutRole] || [];
+      const step = steps[currentTutIndex] || steps[0];
+      if (!step) return;
+
+      const targetEl = document.getElementById(step.targetId);
+      const spotBox = document.getElementById('tour-spotlight-box');
+      const popCard = document.getElementById('tour-popover-card');
+      if (!spotBox || !popCard) return;
+
+      if (!targetEl) {
+        spotBox.style.opacity = '0';
+        popCard.style.top = '50%';
+        popCard.style.left = '50%';
+        popCard.style.transform = 'translate(-50%, -50%)';
+        return;
+      }
+
+      spotBox.style.opacity = '1';
+      popCard.style.transform = 'none';
+
+      const rect = targetEl.getBoundingClientRect();
+      const pad = 8;
+      const sTop = Math.max(8, rect.top - pad);
+      const sLeft = Math.max(8, rect.left - pad);
+      const sWidth = Math.min(window.innerWidth - 16, rect.width + pad * 2);
+      const sHeight = Math.max(36, rect.height + pad * 2);
+
+      spotBox.style.top = sTop + 'px';
+      spotBox.style.left = sLeft + 'px';
+      spotBox.style.width = sWidth + 'px';
+      spotBox.style.height = sHeight + 'px';
+
+      const popWidth = Math.min(390, window.innerWidth - 24);
+      const popHeight = popCard.offsetHeight || 230;
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+
+      // Prefer placing popover below target; if not enough space below, place above; otherwise beside
+      let pTop = sTop + sHeight + 14;
+      if (pTop + popHeight > vh - 12) {
+        pTop = sTop - popHeight - 14;
+      }
+      if (pTop < 12) {
+        pTop = Math.max(12, Math.min(vh - popHeight - 12, sTop));
+      }
+
+      let pLeft = sLeft;
+      if (pLeft + popWidth > vw - 12) {
+        pLeft = Math.max(12, vw - popWidth - 12);
+      }
+
+      popCard.style.top = pTop + 'px';
+      popCard.style.left = pLeft + 'px';
+    }
+
     function renderTutorialStep() {
       const steps = TUTORIAL_STEPS[currentTutRole] || [];
       const step = steps[currentTutIndex] || steps[0];
       if (!step) return;
 
-      const hostTab = document.getElementById('tut-tab-host');
-      const playerTab = document.getElementById('tut-tab-player');
-      if (hostTab && playerTab) {
-        hostTab.className = currentTutRole === 'host'
-          ? 'px-4 py-2 rounded-xl text-xs font-medium btn-accent'
-          : 'px-4 py-2 rounded-xl text-xs font-medium bg-white/5 text-zinc-400 hover:text-white';
-        playerTab.className = currentTutRole === 'player'
-          ? 'px-4 py-2 rounded-xl text-xs font-medium btn-accent'
-          : 'px-4 py-2 rounded-xl text-xs font-medium bg-white/5 text-zinc-400 hover:text-white';
-      }
-
       document.getElementById('tutorial-step-indicator').textContent =
         'STEP 0' + (currentTutIndex + 1) + ' / 0' + steps.length;
       document.getElementById('tutorial-role-label').textContent =
-        currentTutRole === 'host' ? 'HOST GUIDE · 主持人端指南' : 'PLAYER GUIDE · 玩家端指南';
+        currentTutRole === 'lobby'
+          ? 'LOBBY GUIDE · 入口引导'
+          : (currentTutRole === 'host' ? 'HOST GUIDE · 主持人端引导' : 'PLAYER GUIDE · 玩家端引导');
       document.getElementById('tutorial-step-title').textContent = step.title;
       document.getElementById('tutorial-step-desc').textContent = step.desc;
       document.getElementById('tutorial-step-tip').textContent = step.tip;
@@ -1114,7 +1207,7 @@
       const dotsEl = document.getElementById('tutorial-dots');
       if (dotsEl) {
         dotsEl.innerHTML = steps.map((_, idx) => `
-          <button onclick="jumpTutorialStep(${idx})" class="h-1.5 rounded-full transition-all ${idx === currentTutIndex ? 'w-6 btn-accent' : 'w-2 bg-white/15 hover:bg-white/30'}"></button>
+          <button onclick="jumpTutorialStep(${idx})" class="h-1.5 rounded-full transition-all ${idx === currentTutIndex ? 'w-5 btn-accent' : 'w-2 bg-white/15 hover:bg-white/30'}"></button>
         `).join('');
       }
 
@@ -1123,13 +1216,26 @@
       if (prevBtn) {
         prevBtn.disabled = currentTutIndex === 0;
         prevBtn.className = currentTutIndex === 0
-          ? 'px-4 py-2.5 rounded-xl text-xs bg-white/5 text-zinc-600 border border-white/5 cursor-not-allowed'
-          : 'px-4 py-2.5 rounded-xl text-xs bg-white/5 hover:bg-white/10 text-zinc-300 border border-white/10 transition';
+          ? 'px-3.5 py-2 rounded-xl text-xs bg-white/5 text-zinc-600 border border-white/5 cursor-not-allowed'
+          : 'px-3.5 py-2 rounded-xl text-xs bg-white/5 hover:bg-white/10 text-zinc-300 border border-white/10 transition';
       }
       if (nextBtn) {
-        nextBtn.textContent = currentTutIndex === steps.length - 1 ? '完成教程' : '下一步';
+        nextBtn.textContent = currentTutIndex === steps.length - 1 ? '完成引导' : '下一步';
       }
+
+      const targetEl = document.getElementById(step.targetId);
+      if (targetEl && targetEl.scrollIntoView) {
+        try {
+          targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } catch (e) {}
+      }
+      positionTourSpotlight();
+      setTimeout(positionTourSpotlight, 180);
+      setTimeout(positionTourSpotlight, 380);
     }
+
+    window.addEventListener('resize', positionTourSpotlight);
+    window.addEventListener('scroll', positionTourSpotlight, true);
 
     window.jumpTutorialStep = function(idx) {
       currentTutIndex = idx;
