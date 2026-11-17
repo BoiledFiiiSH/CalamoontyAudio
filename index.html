@@ -6,6 +6,7 @@
   <title>TRPG Audio Console · 极简跨网同步混音台</title>
   <script src="https://cdn.tailwindcss.com/3.4.17"></script>
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&family=Noto+Sans+SC:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -207,7 +208,7 @@
       <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div class="space-y-3">
           <div class="text-xs font-mono-code uppercase tracking-widest text-zinc-500">
-            TRPG AUDIO SYNC SYSTEM · v3.0
+            TRPG AUDIO SYNC SYSTEM · v3.2
           </div>
           <h1 class="text-3xl sm:text-4xl font-light text-white tracking-tight">
             进入跑团音频房间
@@ -344,7 +345,7 @@
           </span>
           <span class="text-zinc-600">·</span>
           <span class="text-xs font-mono-code text-zinc-400">
-            v3.0 · ROOM <strong id="header-room-code-text" class="text-zinc-200 font-normal">TRPG-8842</strong>
+            v3.2 · ROOM <strong id="header-room-code-text" class="text-zinc-200 font-normal">TRPG-8842</strong>
           </span>
         </div>
         <h1 id="room-title-display" class="text-2xl sm:text-3xl font-light text-white tracking-tight">
@@ -989,7 +990,7 @@
         '环境音效',
         '玩家投递'
       ],
-      tracks: [],
+      tracks: (window.TRPG_CLOUD_TRACKS && Array.isArray(window.TRPG_CLOUD_TRACKS)) ? window.TRPG_CLOUD_TRACKS : [],
       scenes: [],
       pendingJoinRequests: [],
       approvedPlayersByRoom: {},
@@ -1261,6 +1262,67 @@
     const activeNodes = {};
     let progressTicker = null;
 
+    // Fast in-browser audio compressor (downsamples to 22050Hz Mono 48kbps MP3 via OfflineAudioContext + lamejs)
+    async function compressAudioFileForTRPG(fileBlob) {
+      if (!fileBlob || fileBlob.size < 700 * 1024) {
+        return fileBlob; // Already small (<700KB), no compression needed
+      }
+      if (typeof lamejs === 'undefined' || !lamejs.Mp3Encoder) {
+        return fileBlob;
+      }
+      try {
+        ensureAudioContext();
+        if (!audioCtx) return fileBlob;
+        const arrayBuf = await fileBlob.arrayBuffer();
+        const audioBuffer = await audioCtx.decodeAudioData(arrayBuf.slice(0));
+        const targetSampleRate = 22050;
+        const targetLength = Math.max(1, Math.ceil(audioBuffer.duration * targetSampleRate));
+        const OfflineCtx = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+        if (!OfflineCtx) return fileBlob;
+
+        const offlineCtx = new OfflineCtx(1, targetLength, targetSampleRate);
+        const source = offlineCtx.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(offlineCtx.destination);
+        source.start(0);
+
+        const renderedBuffer = await offlineCtx.startRendering();
+        const floatSamples = renderedBuffer.getChannelData(0);
+        const int16Samples = new Int16Array(floatSamples.length);
+        for (let i = 0; i < floatSamples.length; i++) {
+          const s = Math.max(-1, Math.min(1, floatSamples[i]));
+          int16Samples[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+        }
+
+        const mp3encoder = new lamejs.Mp3Encoder(1, targetSampleRate, 48); // 48kbps mono
+        const mp3Chunks = [];
+        const sampleBlockSize = 1152;
+        for (let i = 0; i < int16Samples.length; i += sampleBlockSize) {
+          const sampleChunk = int16Samples.subarray(i, i + sampleBlockSize);
+          const mp3buf = mp3encoder.encodeBuffer(sampleChunk);
+          if (mp3buf.length > 0) {
+            mp3Chunks.push(new Uint8Array(mp3buf));
+          }
+          // Yield briefly every ~120k samples so UI stays responsive
+          if ((i / sampleBlockSize) % 100 === 99) {
+            await new Promise(r => setTimeout(r, 0));
+          }
+        }
+        const mp3End = mp3encoder.flush();
+        if (mp3End.length > 0) {
+          mp3Chunks.push(new Uint8Array(mp3End));
+        }
+
+        const compressedBlob = new Blob(mp3Chunks, { type: 'audio/mpeg' });
+        if (compressedBlob.size > 0 && compressedBlob.size < fileBlob.size) {
+          return compressedBlob;
+        }
+        return fileBlob;
+      } catch (e) {
+        return fileBlob;
+      }
+    }
+
     function ensureAudioContext() {
       if (!audioCtx) {
         const AudioContextClass = window.AudioContext || window.webkitAudioContext;
@@ -1328,6 +1390,7 @@
       }
     }
 
+    let heartbeatTickCount = 0;
     function startProgressTicker() {
       if (progressTicker) clearInterval(progressTicker);
       progressTicker = setInterval(() => {
@@ -1336,13 +1399,31 @@
           const entry = activeNodes[track.id];
           if (entry && entry.audioEl && !isNaN(entry.audioEl.duration) && entry.audioEl.duration > 0) {
             track.duration = Math.floor(entry.audioEl.duration);
-            track.currentTime = Math.floor(entry.audioEl.currentTime);
-          } else {
+            if (state.role === 'dm') {
+              track.currentTime = Math.floor(entry.audioEl.currentTime);
+            }
+          } else if (state.role === 'dm') {
             const dur = track.duration || 180;
             track.currentTime = ((track.currentTime || 0) + 1) % dur;
           }
           updateTrackProgressDOM(track);
         });
+
+        // Every 3 seconds, Host broadcasts lightweight progress & play-state heartbeat so Players stay aligned
+        heartbeatTickCount++;
+        if (state.role === 'dm' && state.viewStage === 'in_room' && heartbeatTickCount % 3 === 0) {
+          sendPacketToRoom({
+            type: 'HOST_PROGRESS_HEARTBEAT',
+            roomCode: state.roomCode,
+            trackStates: state.tracks.map(t => ({
+              id: t.id,
+              playing: Boolean(t.playing),
+              volume: t.volume,
+              currentTime: t.currentTime || 0,
+              duration: t.duration || 180
+            }))
+          });
+        }
       }, 1000);
     }
 
@@ -1396,16 +1477,19 @@
       audioEl.addEventListener('loadedmetadata', () => {
         if (audioEl.duration && isFinite(audioEl.duration)) {
           track.duration = Math.floor(audioEl.duration);
-          if (track.currentTime > 0 && track.currentTime < track.duration) {
-            try { audioEl.currentTime = track.currentTime; } catch (e) {}
+          const targetTime = track.currentTime || 0;
+          if (targetTime > 0 && targetTime < track.duration && Math.abs((audioEl.currentTime || 0) - targetTime) > 2) {
+            try { audioEl.currentTime = targetTime; } catch (e) {}
           }
           updateTrackProgressDOM(track);
         }
       });
 
       audioEl.addEventListener('timeupdate', () => {
-        track.currentTime = Math.floor(audioEl.currentTime || 0);
-        updateTrackProgressDOM(track);
+        if (state.role === 'dm') {
+          track.currentTime = Math.floor(audioEl.currentTime || 0);
+          updateTrackProgressDOM(track);
+        }
       });
 
       audioEl.addEventListener('playing', () => {
@@ -1565,23 +1649,50 @@
       });
     }
 
-    function syncAudioEngineWithState() {
-      if (!audioCtx) return;
+    function syncAudioEngineWithState(forceCalibrate) {
+      ensureAudioContext();
+      // First stop any activeNodes whose track was removed from state.tracks
+      Object.keys(activeNodes).forEach(tid => {
+        if (!state.tracks.some(t => t.id === tid && t.playing)) {
+          const tr = state.tracks.find(t => t.id === tid);
+          if (tr) {
+            stopTrackWithOptionalFade(tr);
+          } else {
+            stopTrackAudioImmediate(tid);
+          }
+        }
+      });
+
       state.tracks.forEach(track => {
         if (track.playing) {
-          if (!activeNodes[track.id]) {
+          const entry = activeNodes[track.id];
+          if (!entry || !entry.audioEl) {
             startTrackAudio(track);
           } else {
-            const entry = activeNodes[track.id];
-            if (entry.gainNode && audioCtx) {
-              entry.gainNode.gain.setTargetAtTime(Math.max(0.0001, track.volume / 100), audioCtx.currentTime, 0.06);
+            // Track already has an audioEl! Update its volume without restarting from 0
+            if (entry.fadeTimer) {
+              clearInterval(entry.fadeTimer);
+              entry.fadeTimer = null;
             }
-            if (entry.audioEl) {
-              if (entry.fadeTimer) {
-                clearInterval(entry.fadeTimer);
-                entry.fadeTimer = null;
+            entry.audioEl.volume = computeTargetElementVolume(track);
+
+            // Check if playback is paused (e.g. after browser unlock or network pause)
+            if (entry.audioEl.paused) {
+              const targetSec = track.currentTime || 0;
+              if (targetSec > 0 && (!entry.audioEl.duration || targetSec < entry.audioEl.duration)) {
+                try { entry.audioEl.currentTime = targetSec; } catch (e) {}
               }
-              entry.audioEl.volume = computeTargetElementVolume(track);
+              entry.audioEl.play().catch(() => {});
+            } else if (state.role === 'player') {
+              // On Player side: only re-align progress if drift > 10 seconds!
+              // Within 10 seconds, keep playing smoothly without jumping or restarting.
+              const hostSec = Number(track.currentTime) || 0;
+              const localSec = Number(entry.audioEl.currentTime) || 0;
+              if (Math.abs(localSec - hostSec) > 10) {
+                try {
+                  entry.audioEl.currentTime = hostSec;
+                } catch (e) {}
+              }
             }
           }
         } else if (activeNodes[track.id]) {
@@ -1638,19 +1749,21 @@
       if (remoteAudio && remoteAudio.srcObject) {
         remoteAudio.play().catch(() => {});
       }
-      // Force restart any currently playing tracks so browser gesture unlocks them immediately
-      state.tracks.forEach(t => {
-        if (t.playing) {
-          startTrackAudio(t);
-        }
+      // Ask Host for latest playback state & timestamps immediately
+      sendPacketToRoom({
+        type: 'REQUEST_HOST_SYNC',
+        roomCode: state.roomCode,
+        playerName: state.playerName
       });
+      // Calibrate currently playing tracks: start any stopped/paused track, and only seek if drift > 10s
+      syncAudioEngineWithState(true);
       const stEl = document.getElementById('player-stream-status');
       if (stEl) {
-        stEl.textContent = '声音已激活 · 实时同步中';
+        stEl.textContent = '声音已激活 · 已与主持人校准同步';
         stEl.className = 'text-emerald-400';
       }
       reportPlayerStatusToHost();
-      showToast('音频同步已激活，正在实时同步房间音频', 'success');
+      showToast('已校准并同步主持人当前播放曲目与进度（误差10秒内保持平滑播放）', 'success');
     };
 
     // =====================================================
@@ -1732,6 +1845,10 @@
       if (errBanner) errBanner.classList.add('hidden');
 
       ensureAudioContext();
+      // Clear any leftover tracks from previous rooms so Player starts with a clean slate for this room
+      Object.keys(activeNodes).forEach(tid => stopTrackAudioImmediate(tid));
+      state.tracks = [];
+      state.pendingRequests = [];
       state.playerName = playerName;
       state.role = 'player';
       state.theme = getDefaultTheme();
@@ -2174,18 +2291,28 @@
       try {
         const buf = await blob.arrayBuffer();
         const bytes = new Uint8Array(buf);
-        const CHUNK_SIZE = 48 * 1024;
+        const CHUNK_SIZE = 32 * 1024; // 32KB chunks so control commands (song switch) pass through with zero delay
         const total = Math.ceil(bytes.length / CHUNK_SIZE);
+        const dc = conn.dataChannel || conn._dc || null;
+
         for (let i = 0; i < total; i++) {
           if (!conn.open) return false;
-          // If a newly played Tier-1 track preempted this background transfer, yield immediately
           if (conn._preemptRequested && getTrackSyncPriority(track) > 1) {
             conn._preemptRequested = false;
             return false;
           }
+          // Keep buffer <= 64KB so ROOM_SYNC / song-switch packets arrive in <15ms without head-of-line blocking
+          if (dc && typeof dc.bufferedAmount === 'number') {
+            let guard = 0;
+            while (conn.open && dc.bufferedAmount > 64 * 1024 && guard < 60) {
+              await new Promise(r => setTimeout(r, 10));
+              guard++;
+            }
+          } else if (i % 3 === 2) {
+            await new Promise(r => setTimeout(r, 6));
+          }
+
           const slice = bytes.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
-          let binary = '';
-          for (let j = 0; j < slice.length; j++) binary += String.fromCharCode(slice[j]);
           conn.send({
             type: 'AUDIO_FILE_CHUNK',
             roomCode: state.roomCode,
@@ -2193,11 +2320,8 @@
             mime: blob.type || 'audio/mpeg',
             index: i,
             total: total,
-            dataB64: btoa(binary)
+            dataBin: slice.buffer
           });
-          if (i % 4 === 3) {
-            await new Promise(r => setTimeout(r, 6));
-          }
         }
         return true;
       } catch (e) {
@@ -2252,6 +2376,9 @@
     }
 
     function broadcastRoomState() {
+      if (state.role !== 'dm' || state.viewStage !== 'in_room') {
+        return; // Players NEVER broadcast ROOM_SYNC (prevents uploading other rooms' playlists to Host!)
+      }
       const packet = {
         type: 'ROOM_SYNC',
         roomCode: state.roomCode,
@@ -2287,30 +2414,79 @@
       if (data.type === 'AUDIO_FILE_CHUNK') {
         const tid = data.trackId;
         if (!incomingAudioChunks[tid]) {
-          incomingAudioChunks[tid] = { total: data.total, received: 0, chunks: new Array(data.total), mime: data.mime };
+          incomingAudioChunks[tid] = {
+            total: data.total,
+            received: 0,
+            chunks: new Array(data.total),
+            mime: data.mime || 'audio/mpeg',
+            earlyStarted: false
+          };
         }
         const entry = incomingAudioChunks[tid];
         if (!entry.chunks[data.index]) {
-          entry.chunks[data.index] = data.dataB64;
+          if (data.dataBin) {
+            entry.chunks[data.index] = new Uint8Array(data.dataBin);
+          } else if (data.dataB64) {
+            const bin = atob(data.dataB64);
+            const arr = new Uint8Array(bin.length);
+            for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+            entry.chunks[data.index] = arr;
+          }
           entry.received++;
         }
+
+        const tr = state.tracks.find(t => t.id === tid);
+
+        // Progressive Early-Start (边下边播): if this track is currently playing on Host,
+        // and we have received the first contiguous ~20% (or >= 8 chunks = 512KB), start playing immediately!
+        const earlyThreshold = Math.min(entry.total, Math.max(4, Math.min(8, Math.ceil(entry.total * 0.2))));
+        if (tr && tr.playing && !entry.earlyStarted && entry.received >= earlyThreshold && entry.received < entry.total) {
+          let contiguousCount = 0;
+          const partialParts = [];
+          for (let k = 0; k < entry.total; k++) {
+            if (entry.chunks[k]) {
+              partialParts.push(entry.chunks[k]);
+              contiguousCount++;
+            } else {
+              break;
+            }
+          }
+          if (contiguousCount >= earlyThreshold) {
+            entry.earlyStarted = true;
+            try {
+              const partialBlob = new Blob(partialParts, { type: entry.mime });
+              tr.audioUrl = URL.createObjectURL(partialBlob);
+              tr._isPartial = true;
+              startTrackAudio(tr);
+              updateMasterGainValue();
+              reportPlayerStatusToHost('playing');
+            } catch (e) {}
+          }
+        }
+
         if (entry.received === entry.total) {
           try {
-            const byteArrays = entry.chunks.map(b64 => {
-              const bin = atob(b64);
-              const arr = new Uint8Array(bin.length);
-              for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-              return arr;
-            });
-            const blob = new Blob(byteArrays, { type: entry.mime || 'audio/mpeg' });
-            saveBlobToIndexedDB(tid, blob);
-            const tr = state.tracks.find(t => t.id === tid);
+            const fullBlob = new Blob(entry.chunks, { type: entry.mime });
+            saveBlobToIndexedDB(tid, fullBlob);
             if (tr) {
-              tr.audioUrl = URL.createObjectURL(blob);
-              if (tr.playing) {
-                stopTrackAudioImmediate(tr.id);
+              const fullUrl = URL.createObjectURL(fullBlob);
+              const activeNode = activeNodes[tr.id];
+              // If already playing the early partial stream, smoothly swap to full blob at exact currentTime
+              if (tr.playing && activeNode && activeNode.audioEl && tr._isPartial) {
+                const curPos = activeNode.audioEl.currentTime || tr.currentTime || 0;
+                tr.audioUrl = fullUrl;
+                tr._isPartial = false;
+                tr.currentTime = curPos;
                 startTrackAudio(tr);
                 updateMasterGainValue();
+              } else {
+                tr.audioUrl = fullUrl;
+                tr._isPartial = false;
+                if (tr.playing) {
+                  stopTrackAudioImmediate(tr.id);
+                  startTrackAudio(tr);
+                  updateMasterGainValue();
+                }
               }
             }
             const stEl = document.getElementById('player-stream-status');
@@ -2455,7 +2631,34 @@
         return;
       }
 
+      if (data.type === 'REQUEST_HOST_SYNC') {
+        if (state.role === 'dm' && state.viewStage === 'in_room') {
+          broadcastRoomState();
+        }
+        return;
+      }
+
+      if (data.type === 'HOST_PROGRESS_HEARTBEAT' && Array.isArray(data.trackStates)) {
+        if (state.role === 'player' && state.viewStage === 'in_room') {
+          data.trackStates.forEach(ts => {
+            const tr = state.tracks.find(t => t.id === ts.id);
+            if (tr) {
+              tr.playing = Boolean(ts.playing);
+              tr.volume = ts.volume;
+              tr.currentTime = ts.currentTime || 0;
+              if (ts.duration) tr.duration = ts.duration;
+            }
+          });
+          syncAudioEngineWithState(false);
+        }
+        return;
+      }
+
       if (data.type === 'ROOM_SYNC') {
+        // Host is the single source of truth; ignore any ROOM_SYNC if we are the Host
+        if (state.role === 'dm' && state.viewStage === 'in_room') {
+          return;
+        }
         if (typeof data.dmHolderId === 'string') {
           state.dmHolderId = data.dmHolderId;
         }
@@ -2465,21 +2668,24 @@
         }
 
         if (Array.isArray(data.tracks)) {
-          data.tracks.forEach(incoming => {
-            const existing = state.tracks.find(t => t.id === incoming.id);
-            if (existing) {
-              existing.name = incoming.name;
-              existing.emoji = incoming.emoji;
-              existing.folder = incoming.folder;
-              existing.tags = incoming.tags;
-              existing.volume = incoming.volume;
-              existing.playing = incoming.playing;
-              if (typeof incoming.currentTime === 'number') existing.currentTime = incoming.currentTime;
-              if (typeof incoming.duration === 'number') existing.duration = incoming.duration;
-            } else {
-              state.tracks.push(incoming);
-            }
+          // On Player side, replace state.tracks strictly with the current Host's tracks
+          // while preserving any already-cached local audioUrl for matching track IDs
+          const oldUrlMap = {};
+          const oldPartialMap = {};
+          state.tracks.forEach(t => {
+            if (t.audioUrl) oldUrlMap[t.id] = t.audioUrl;
+            if (t._isPartial) oldPartialMap[t.id] = true;
           });
+          state.tracks = data.tracks.map(incoming => {
+            const copy = Object.assign({}, incoming);
+            if (!copy.audioUrl && oldUrlMap[copy.id]) {
+              copy.audioUrl = oldUrlMap[copy.id];
+              copy._isPartial = Boolean(oldPartialMap[copy.id]);
+            }
+            return copy;
+          });
+          // Restore any blobs from IndexedDB that match the Host's tracks
+          restoreBlobsFromIndexedDB();
         }
         if (Array.isArray(data.pendingJoinRequests)) {
           state.pendingJoinRequests = data.pendingJoinRequests;
@@ -2584,8 +2790,11 @@
           items.forEach(item => {
             if (item.blob && item.blob.size) totalBytes += item.blob.size;
             const track = state.tracks.find(t => t.id === item.id);
-            if (track && item.blob) {
+            if (track && item.blob && !track.audioUrl) {
               track.audioUrl = URL.createObjectURL(item.blob);
+              if (track.playing && state.viewStage === 'in_room') {
+                startTrackAudio(track);
+              }
             }
           });
           updateCacheSizeDisplay(totalBytes);
@@ -2644,6 +2853,10 @@
     };
 
     function saveStateToLocalStorage() {
+      if (state.role !== 'dm') {
+        saveSessionState();
+        return;
+      }
       try {
         const serializable = {
           roomCode: state.roomCode,
@@ -2775,6 +2988,13 @@
         }
         if (Array.isArray(parsed.tracks)) {
           state.tracks = parsed.tracks.map(t => Object.assign({ currentTime: 0, duration: 180 }, t, { playing: false }));
+        }
+        if (window.TRPG_CLOUD_TRACKS && Array.isArray(window.TRPG_CLOUD_TRACKS)) {
+          window.TRPG_CLOUD_TRACKS.forEach(ct => {
+            if (!state.tracks.some(t => t.id === ct.id || (t.audioUrl && t.audioUrl === ct.audioUrl))) {
+              state.tracks.push(Object.assign({ currentTime: 0, duration: 180, playing: false }, ct));
+            }
+          });
         }
       } catch (e) {}
     }
@@ -2926,13 +3146,18 @@
     // =====================================================
     // 8. IMPORTING LOCAL SONGS & ONLINE / BILIBILI LINKS
     // =====================================================
-    window.handleDmLocalFiles = function(fileList) {
+    window.handleDmLocalFiles = async function(fileList) {
       if (!fileList || !fileList.length) return;
+      const filesArr = Array.from(fileList);
+      closeModal('import-modal');
+      showToast('正在自动压缩并导入 ' + filesArr.length + ' 首音频以加速玩家端缓存...', 'info');
       const targetFolder = state.currentFolder === '全部曲目' ? '默认曲库' : state.currentFolder;
-      Array.from(fileList).forEach(file => {
+
+      for (const file of filesArr) {
         const cleanName = file.name.replace(/\.[^/.]+$/, '');
         const trackId = 'track_local_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
-        const blobUrl = URL.createObjectURL(file);
+        const compactBlob = await compressAudioFileForTRPG(file);
+        const blobUrl = URL.createObjectURL(compactBlob);
         const newTrack = {
           id: trackId,
           name: cleanName,
@@ -2948,13 +3173,13 @@
           duration: 180
         };
         state.tracks.unshift(newTrack);
-        saveBlobToIndexedDB(trackId, file);
-      });
-      closeModal('import-modal');
+        await saveBlobToIndexedDB(trackId, compactBlob);
+        renderAll();
+      }
       broadcastRoomState();
       peerConnections.forEach(c => pushAllLocalAudioFilesToConn(c));
       renderAll();
-      showToast('已成功导入 ' + fileList.length + ' 首本地音频到仓库', 'success');
+      showToast('已成功压缩并导入 ' + filesArr.length + ' 首音频到仓库', 'success');
     };
 
     window.addOnlineTrackToRepo = function() {
@@ -3214,17 +3439,19 @@
           roomCode: state.roomCode,
           reqObj: reqObj
         });
-        broadcastRoomState();
         renderAll();
         showToast('播放申请已发送给主持人', 'success');
       };
 
       if (isFile && pendingPlayerFileBlob) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          dispatchRequest(e.target.result, 'file');
-        };
-        reader.readAsDataURL(pendingPlayerFileBlob);
+        showToast('正在自动压缩音频并发送给主持人...', 'info');
+        compressAudioFileForTRPG(pendingPlayerFileBlob).then((compactBlob) => {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            dispatchRequest(e.target.result, 'file');
+          };
+          reader.readAsDataURL(compactBlob);
+        });
       } else if (!isFile && rawUrl) {
         dispatchRequest(rawUrl, rawUrl.includes('BV') ? 'synth' : 'url');
       } else {
@@ -3256,7 +3483,22 @@
           currentTime: 0,
           duration: 180
         };
+        if (newTrack.audioUrl && newTrack.audioUrl.startsWith('data:')) {
+          try {
+            const parts = newTrack.audioUrl.split(',');
+            const mimeMatch = parts[0].match(/:(.*?);/);
+            const mime = mimeMatch ? mimeMatch[1] : 'audio/mpeg';
+            const bin = atob(parts[1]);
+            const arr = new Uint8Array(bin.length);
+            for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+            const blob = new Blob([arr], { type: mime });
+            saveBlobToIndexedDB(newTrack.id, blob);
+            newTrack.audioUrl = URL.createObjectURL(blob);
+            newTrack.sourceType = 'file';
+          } catch (e) {}
+        }
         state.tracks.unshift(newTrack);
+        peerConnections.forEach(c => pushAllLocalAudioFilesToConn(c));
         if (action === 'play_now') {
           startTrackAudio(newTrack);
           if (hist) {
