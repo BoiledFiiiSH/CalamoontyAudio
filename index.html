@@ -207,7 +207,7 @@
       <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div class="space-y-3">
           <div class="text-xs font-mono-code uppercase tracking-widest text-zinc-500">
-            TRPG AUDIO SYNC SYSTEM · v2.6
+            TRPG AUDIO SYNC SYSTEM · v2.8
           </div>
           <h1 class="text-3xl sm:text-4xl font-light text-white tracking-tight">
             进入跑团音频房间
@@ -344,7 +344,7 @@
           </span>
           <span class="text-zinc-600">·</span>
           <span class="text-xs font-mono-code text-zinc-400">
-            v2.6 · ROOM <strong id="header-room-code-text" class="text-zinc-200 font-normal">TRPG-8842</strong>
+            v2.8 · ROOM <strong id="header-room-code-text" class="text-zinc-200 font-normal">TRPG-8842</strong>
           </span>
         </div>
         <h1 id="room-title-display" class="text-2xl sm:text-3xl font-light text-white tracking-tight">
@@ -453,8 +453,8 @@
             <input id="player-master-slider" type="range" min="0" max="150" value="100" oninput="onPlayerMasterVolumeChange(this.value)" class="accent-slider" />
           </div>
 
-          <div class="flex items-center justify-between pt-4 border-t border-white/10 text-xs text-zinc-400">
-            <span id="player-cache-size-label">本地音频缓存：计算中...</span>
+          <div class="flex items-center justify-end pt-4 border-t border-white/10 text-xs text-zinc-400">
+            
             <button onclick="clearLocalAudioCache()" class="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-rose-500/20 text-zinc-300 hover:text-rose-200 border border-white/10 transition">
               清理本地音频缓存
             </button>
@@ -1714,6 +1714,11 @@
         peerInstance.on('connection', (conn) => {
           peerConnections.push(conn);
           conn.on('data', (data) => {
+            if (data && data.type === 'PLAYER_CACHE_INVENTORY' && Array.isArray(data.cachedIds)) {
+              conn._cachedTrackIds = new Set(data.cachedIds);
+              pushAllLocalAudioFilesToConn(conn);
+              return;
+            }
             handleIncomingSyncPacket(data);
           });
           conn.on('open', () => {
@@ -1807,7 +1812,13 @@
           const hostId = getHostPeerId(state.roomCode);
           const conn = peerInstance.connect(hostId, { reliable: true });
           peerConnections = [conn];
-          conn.on('open', () => {
+          conn.on('open', async () => {
+            const cachedIds = await getCachedTrackIdsFromDB();
+            conn.send({
+              type: 'PLAYER_CACHE_INVENTORY',
+              roomCode: state.roomCode,
+              cachedIds: cachedIds
+            });
             conn.send({
               type: 'PLAYER_DIRECT_JOIN',
               roomCode: state.roomCode,
@@ -1865,16 +1876,55 @@
       });
     }
 
-    async function pushTrackFileToConn(track, conn) {
-      if (!conn || !conn.open || track.sourceType !== 'file') return;
+    async function getCachedTrackIdsFromDB() {
+      const db = await openAudioDB();
+      if (!db) return [];
+      return new Promise((resolve) => {
+        try {
+          const tx = db.transaction(DB_STORE, 'readonly');
+          const req = tx.objectStore(DB_STORE).getAllKeys();
+          req.onsuccess = () => resolve(Array.isArray(req.result) ? req.result : []);
+          req.onerror = () => resolve([]);
+        } catch (e) { resolve([]); }
+      });
+    }
+
+    function getTrackSyncPriority(track) {
+      // Tier 1: Currently playing track (highest priority = 1)
+      if (track.playing) return 1;
+      // Tier 2: Track belonging to any saved Scene preset (priority = 2)
+      const inScene = state.scenes.some(sc =>
+        Array.isArray(sc.items) && sc.items.some(it => it.id === track.id)
+      );
+      if (inScene) return 2;
+      // Tier 3: Other repository tracks (priority = 3)
+      return 3;
+    }
+
+    function getSortedPendingTracksForConn(conn) {
+      const cachedSet = conn._cachedTrackIds || new Set();
+      return state.tracks
+        .filter(t => t.sourceType === 'file' && !cachedSet.has(t.id))
+        .slice()
+        .sort((a, b) => getTrackSyncPriority(a) - getTrackSyncPriority(b));
+    }
+
+    async function streamSingleTrackToConn(track, conn) {
+      if (!conn || !conn.open || track.sourceType !== 'file') return false;
       const blob = await getTrackBlobFromDB(track.id);
-      if (!blob) return;
+      if (!blob) return false;
       try {
         const buf = await blob.arrayBuffer();
         const bytes = new Uint8Array(buf);
-        const CHUNK_SIZE = 48 * 1024; // 48KB per chunk
+        const CHUNK_SIZE = 48 * 1024;
         const total = Math.ceil(bytes.length / CHUNK_SIZE);
         for (let i = 0; i < total; i++) {
+          if (!conn.open) return false;
+          // If a newly played Tier-1 track preempted this background transfer, yield immediately
+          if (conn._preemptRequested && getTrackSyncPriority(track) > 1) {
+            conn._preemptRequested = false;
+            return false;
+          }
           const slice = bytes.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
           let binary = '';
           for (let j = 0; j < slice.length; j++) binary += String.fromCharCode(slice[j]);
@@ -1887,20 +1937,60 @@
             total: total,
             dataB64: btoa(binary)
           });
+          if (i % 4 === 3) {
+            await new Promise(r => setTimeout(r, 6));
+          }
         }
-      } catch (e) {}
+        return true;
+      } catch (e) {
+        return false;
+      }
+    }
+
+    async function processConnSyncQueue(conn) {
+      if (!conn || !conn.open || conn._queueRunning) return;
+      conn._queueRunning = true;
+      if (!conn._cachedTrackIds) conn._cachedTrackIds = new Set();
+
+      try {
+        while (conn.open) {
+          const queue = getSortedPendingTracksForConn(conn);
+          if (queue.length === 0) break;
+          const nextTrack = queue[0];
+          conn._sendingTrackId = nextTrack.id;
+          conn._preemptRequested = false;
+          const completed = await streamSingleTrackToConn(nextTrack, conn);
+          if (completed) {
+            conn._cachedTrackIds.add(nextTrack.id);
+          }
+          conn._sendingTrackId = null;
+          await new Promise(r => setTimeout(r, 15));
+        }
+      } finally {
+        conn._queueRunning = false;
+        conn._sendingTrackId = null;
+      }
     }
 
     function pushAllLocalAudioFilesToConn(conn) {
-      state.tracks.forEach(t => {
-        if (t.sourceType === 'file') {
-          pushTrackFileToConn(t, conn);
-        }
-      });
+      if (!conn || !conn.open) return;
+      if (!conn._cachedTrackIds) conn._cachedTrackIds = new Set();
+      // If a playing track is not yet cached and currently sending a lower-priority track, preempt it
+      const hasUncachedPlaying = state.tracks.some(
+        t => t.playing && t.sourceType === 'file' && !conn._cachedTrackIds.has(t.id) && conn._sendingTrackId !== t.id
+      );
+      if (hasUncachedPlaying && conn._queueRunning) {
+        conn._preemptRequested = true;
+      }
+      processConnSyncQueue(conn);
     }
 
-    function pushTrackFileToAllPlayers(track) {
-      peerConnections.forEach(conn => pushTrackFileToConn(track, conn));
+    function triggerPrioritySyncAcrossPlayers() {
+      peerConnections.forEach(conn => {
+        if (conn && conn.open) {
+          pushAllLocalAudioFilesToConn(conn);
+        }
+      });
     }
 
     function broadcastRoomState() {
@@ -1967,8 +2057,7 @@
             }
             const stEl = document.getElementById('player-stream-status');
             if (stEl) {
-              const cachedCount = state.tracks.filter(t => t.audioUrl).length;
-              stEl.textContent = '高清本地缓存已同步 (' + cachedCount + '/' + state.tracks.length + ' 首)';
+              stEl.textContent = '音频同步已就绪';
               stEl.className = 'text-emerald-400';
             }
           } catch (e) {}
@@ -2212,8 +2301,7 @@
     }
 
     function updateCacheSizeDisplay(totalBytes) {
-      const lbl = document.getElementById('player-cache-size-label');
-      if (!lbl) return;
+      return;
       const mb = (totalBytes / (1024 * 1024)).toFixed(1);
       lbl.textContent = '本地音频缓存：' + mb + ' MB';
     }
@@ -2437,6 +2525,9 @@
       }
       syncSceneStatesWithTracks();
       broadcastRoomState();
+      if (track.playing) {
+        triggerPrioritySyncAcrossPlayers();
+      }
       renderAll();
     };
 
@@ -2512,6 +2603,7 @@
         });
         syncSceneStatesWithTracks();
         broadcastRoomState();
+        triggerPrioritySyncAcrossPlayers();
         renderAll();
         showToast('已开启场景：' + scene.name, 'success');
       }
@@ -2533,6 +2625,7 @@
           items: activeItems
         });
         saveStateToLocalStorage();
+        triggerPrioritySyncAcrossPlayers();
         renderScenePresets();
         showToast('已保存新场景：' + name, 'success');
       });
